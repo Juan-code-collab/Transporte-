@@ -30,6 +30,8 @@ test('lineaDe normaliza distintos formatos', () => {
   assert.equal(lineaDe({ linea: 'Línea 60' }), '60');
   assert.equal(lineaDe({ LINEA: 152 }), '152');
   assert.equal(lineaDe({ ref: 'H' }), 'H');
+  assert.equal(lineaDe({ linea: '004' }), '4');
+  assert.equal(lineaDe({ LINEA: 'LINEA 032' }), '32');
   assert.equal(lineaDe({}), null);
 });
 
@@ -37,6 +39,7 @@ test('jurisdiccionDe usa el campo explícito y si no infiere por número', () =>
   assert.equal(jurisdiccionDe({ linea: '60', jurisdiccion: 'Nacional' }), 'nacional');
   assert.equal(jurisdiccionDe({ linea: '60', JURISDICCION: 'Ciudad Autónoma' }), 'ciudad');
   assert.equal(jurisdiccionDe({ linea: '7' }), 'ciudad');
+  assert.equal(jurisdiccionDe({ linea: '007' }), 'ciudad');
   assert.equal(jurisdiccionDe({ linea: '60' }), 'nacional');
   assert.equal(jurisdiccionDe({ linea: '338' }), 'provincial');
 });

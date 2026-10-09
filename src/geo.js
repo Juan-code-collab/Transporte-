@@ -85,7 +85,13 @@ export function lineaDe(props) {
   const v = primerCampo(props, CAMPOS_LINEA);
   if (!v) return null;
   const m = v.match(/\b(\d{1,3}|[A-HP])\b/);
-  return m ? m[1].toUpperCase() : v;
+  return normalizarLinea(m ? m[1] : v);
+}
+
+// "004" → "4", "a" → "A": así se busca la línea como se la conoce.
+export function normalizarLinea(texto) {
+  const t = String(texto).trim().toUpperCase();
+  return /^\d+$/.test(t) ? String(Number(t)) : t;
 }
 
 // 'ciudad' | 'nacional' | 'provincial' | 'municipal' | null

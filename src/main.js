@@ -3,7 +3,7 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { CAPAS, OVERPASS_APIS } from './capas.js';
 import { capasGoogle } from './google.js';
-import { colorSubte, jurisdiccionDe, lineaDe, overpassAGeojson, soloLineas } from './geo.js';
+import { colorSubte, jurisdiccionDe, lineaDe, normalizarLinea, overpassAGeojson, soloLineas } from './geo.js';
 
 const DATOS = `${import.meta.env.BASE_URL}data/`;
 
@@ -105,8 +105,8 @@ function filtroColectivos() {
   const lineas = document
     .getElementById('filtro-linea')
     .value.split(/[\s,;]+/)
-    .map((s) => s.trim().toUpperCase())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(normalizarLinea);
   const jur = document.getElementById('filtro-jurisdiccion').value;
   return (feat) =>
     (!lineas.length || lineas.includes(lineaDe(feat.properties))) &&
