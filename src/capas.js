@@ -9,7 +9,12 @@
 //      cuando el Gobierno no publica la geometría (p. ej. autopistas).
 
 export const CKAN_API = 'https://data.buenosaires.gob.ar/api/3/action/package_show';
-export const OVERPASS_API = 'https://overpass-api.de/api/interpreter';
+// Servidores públicos de Overpass: si uno está saturado (504), se prueba el siguiente.
+export const OVERPASS_APIS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
 
 // Área de la Ciudad Autónoma de Buenos Aires en OpenStreetMap.
 const AREA_CABA =

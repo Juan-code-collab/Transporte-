@@ -1,8 +1,8 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
-import { CAPAS, OVERPASS_API } from './capas.js';
-import { colorSubte, jurisdiccionDe, lineaDe, overpassAGeojson } from './geo.js';
+import { CAPAS, OVERPASS_APIS } from './capas.js';
+import { colorSubte, jurisdiccionDe, lineaDe, overpassAGeojson, soloLineas } from './geo.js';
 
 const DATOS = `${import.meta.env.BASE_URL}data/`;
 
@@ -70,22 +70,27 @@ async function cargar(capa, avisar) {
   try {
     const r = await fetch(`${DATOS}${capa.id}.geojson`);
     if (r.ok) {
-      const geojson = await r.json(); // falla si el servidor devolvió index.html
-      if (geojson.features) return geojson;
+      const geojson = soloLineas(await r.json()); // falla si el servidor devolvió index.html
+      if (geojson.features.length) return geojson;
     }
   } catch {
     // sin archivo local: seguimos con OpenStreetMap
   }
-  // 2) Respaldo en vivo: OpenStreetMap vía Overpass.
+  // 2) Respaldo en vivo: OpenStreetMap vía Overpass, probando cada servidor.
   if (!capa.overpass) throw new Error('sin datos locales');
   avisar('Consultando OpenStreetMap… (puede tardar)');
-  const r = await fetch(OVERPASS_API, {
-    method: 'POST',
-    body: new URLSearchParams({ data: capa.overpass }),
-  });
-  if (!r.ok) throw new Error(`Overpass respondió ${r.status}`);
-  fuentes.osmEnVivo = true;
-  return overpassAGeojson(await r.json());
+  let ultimoError;
+  for (const servidor of OVERPASS_APIS) {
+    try {
+      const r = await fetch(servidor, { method: 'POST', body: new URLSearchParams({ data: capa.overpass }) });
+      if (!r.ok) throw new Error(`Overpass respondió ${r.status}`);
+      fuentes.osmEnVivo = true;
+      return soloLineas(overpassAGeojson(await r.json()));
+    } catch (e) {
+      ultimoError = e;
+    }
+  }
+  throw ultimoError;
 }
 
 // ------------------------------------------------------------------- capas

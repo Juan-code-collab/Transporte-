@@ -33,6 +33,12 @@ function aCoord({ lon, lat }) {
   return [lon, lat];
 }
 
+// Deja sólo los recorridos (líneas). Algunos datasets mezclan estaciones (puntos).
+export function soloLineas(geojson) {
+  const features = (geojson.features ?? []).filter((f) => /LineString$/.test(f.geometry?.type ?? ''));
+  return { ...geojson, features };
+}
+
 // Redondea coordenadas a 6 decimales (~10 cm) para achicar los archivos.
 export function redondear(geojson, decimales = 6) {
   const f = 10 ** decimales;

@@ -9,8 +9,8 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { CAPAS, CKAN_API, OVERPASS_API } from '../src/capas.js';
-import { esWgs84, overpassAGeojson, redondear } from '../src/geo.js';
+import { CAPAS, CKAN_API, OVERPASS_APIS } from '../src/capas.js';
+import { esWgs84, overpassAGeojson, redondear, soloLineas } from '../src/geo.js';
 
 const DESTINO = fileURLToPath(new URL('../public/data/', import.meta.url));
 const AGENTE = 'transporte-caba/0.1 (mapa de transporte de Buenos Aires)';
@@ -28,27 +28,53 @@ async function pedirJson(url, opciones = {}) {
 
 async function desdeCkan({ dataset, recurso }) {
   const { result } = await pedirJson(`${CKAN_API}?id=${encodeURIComponent(dataset)}`);
-  const candidatos = result.resources.filter(
-    (r) => /geojson/i.test(r.format) || /\.geojson(\?|$)/i.test(r.url),
-  );
-  const elegido = candidatos.find((r) => recurso.test(r.name) || recurso.test(r.url)) ?? candidatos[0];
-  if (!elegido) throw new Error(`el dataset "${dataset}" no tiene recursos GeoJSON`);
-  const geojson = await pedirJson(elegido.url);
-  if (!esWgs84(geojson)) throw new Error(`${elegido.url} no está en coordenadas WGS84`);
-  return { geojson, fuente: `Gobierno de la Ciudad de Buenos Aires — ${result.title}`, url: elegido.url };
+  const candidatos = result.resources
+    .filter((r) => /geojson/i.test(r.format) || /\.geojson(\?|$)/i.test(r.url))
+    // Primero los que coinciden con el nombre esperado; el resto queda de reserva.
+    .sort((a, b) => coincide(b, recurso) - coincide(a, recurso));
+  if (!candidatos.length) throw new Error(`el dataset "${dataset}" no tiene recursos GeoJSON`);
+
+  // Un dataset puede tener varios GeoJSON (p. ej. estaciones y líneas): se usa
+  // el primero que traiga recorridos.
+  for (const r of candidatos) {
+    const geojson = soloLineas(await pedirJson(r.url));
+    if (!geojson.features.length) {
+      console.log(`  · ${r.name}: sin recorridos (sólo puntos), se descarta`);
+      continue;
+    }
+    if (!esWgs84(geojson)) {
+      console.log(`  · ${r.name}: no está en coordenadas WGS84, se descarta`);
+      continue;
+    }
+    return { geojson, fuente: `Gobierno de la Ciudad de Buenos Aires — ${result.title}`, url: r.url };
+  }
+  throw new Error(`ningún GeoJSON de "${dataset}" trae recorridos`);
+}
+
+function coincide(r, recurso) {
+  return Number(recurso.test(r.name) || recurso.test(r.url));
 }
 
 async function desdeOverpass(consulta) {
-  const respuesta = await pedirJson(OVERPASS_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ data: consulta }),
-  });
-  return {
-    geojson: overpassAGeojson(respuesta),
-    fuente: '© colaboradores de OpenStreetMap (ODbL)',
-    url: OVERPASS_API,
-  };
+  let ultimoError;
+  for (const servidor of OVERPASS_APIS) {
+    try {
+      const respuesta = await pedirJson(servidor, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ data: consulta }),
+      });
+      return {
+        geojson: soloLineas(overpassAGeojson(respuesta)),
+        fuente: '© colaboradores de OpenStreetMap (ODbL)',
+        url: servidor,
+      };
+    } catch (e) {
+      console.log(`  · ${e.message}`);
+      ultimoError = e;
+    }
+  }
+  throw ultimoError;
 }
 
 async function descargar(capa, fuenteForzada) {

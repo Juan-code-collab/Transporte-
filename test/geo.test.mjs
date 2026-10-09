@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { colorSubte, esWgs84, jurisdiccionDe, lineaDe, overpassAGeojson, redondear } from '../src/geo.js';
+import { colorSubte, esWgs84, jurisdiccionDe, lineaDe, overpassAGeojson, redondear, soloLineas } from '../src/geo.js';
 
 test('overpassAGeojson convierte vías y relaciones, ignorando paradas', () => {
   const geo = overpassAGeojson({
@@ -55,4 +55,15 @@ test('esWgs84 detecta coordenadas planas', () => {
 test('redondear recorta decimales en geometrías anidadas', () => {
   const geo = redondear({ features: [{ geometry: { coordinates: [[[-58.123456789, -34.987654321]]] } }] });
   assert.deepEqual(geo.features[0].geometry.coordinates, [[[-58.123457, -34.987654]]]);
+});
+
+test('soloLineas descarta puntos (p. ej. estaciones)', () => {
+  const geo = soloLineas({
+    type: 'FeatureCollection',
+    features: [
+      { geometry: { type: 'Point', coordinates: [-58.4, -34.6] } },
+      { geometry: { type: 'MultiLineString', coordinates: [[[-58.4, -34.6], [-58.5, -34.7]]] } },
+    ],
+  });
+  assert.equal(geo.features.length, 1);
 });
