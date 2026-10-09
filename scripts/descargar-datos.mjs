@@ -82,27 +82,32 @@ function coincide(r, recurso) {
   return Number(recurso.test(r.name) || recurso.test(r.url));
 }
 
-async function desdeOverpass(consulta) {
+// Los servidores públicos de Overpass se saturan seguido (504/500): se
+// recorren todos, y si ninguno responde se espera y se hace otra vuelta.
+async function desdeOverpass(consulta, vueltas = 3) {
   let ultimoError;
-  for (const servidor of OVERPASS_APIS) {
-    try {
-      const respuesta = await pedirJson(
-        servidor,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ data: consulta }),
-        },
-        1,
-      );
-      return {
-        geojson: soloLineas(overpassAGeojson(respuesta)),
-        fuente: '© colaboradores de OpenStreetMap (ODbL)',
-        url: servidor,
-      };
-    } catch (e) {
-      console.log(`  · ${e.message}`);
-      ultimoError = e;
+  for (let vuelta = 1; vuelta <= vueltas; vuelta++) {
+    if (vuelta > 1) await new Promise((ok) => setTimeout(ok, 20000));
+    for (const servidor of OVERPASS_APIS) {
+      try {
+        const respuesta = await pedirJson(
+          servidor,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ data: consulta }),
+          },
+          1,
+        );
+        return {
+          geojson: soloLineas(overpassAGeojson(respuesta)),
+          fuente: '© colaboradores de OpenStreetMap (ODbL)',
+          url: servidor,
+        };
+      } catch (e) {
+        console.log(`  · ${e.message}`);
+        ultimoError = e;
+      }
     }
   }
   throw ultimoError;
