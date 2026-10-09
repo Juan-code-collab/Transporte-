@@ -9,8 +9,8 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { CAPAS, CKAN_API, OVERPASS_APIS } from '../src/capas.js';
-import { esWgs84, overpassAGeojson, redondear, soloLineas } from '../src/geo.js';
+import { CAPAS, OVERPASS_APIS } from '../src/capas.js';
+import { esWgs84, lineaDe, overpassAGeojson, pasaPorCaba, redondear, simplificar, soloLineas } from '../src/geo.js';
 
 const DESTINO = fileURLToPath(new URL('../public/data/', import.meta.url));
 const AGENTE = 'transporte-caba/0.1 (mapa de transporte de Buenos Aires)';
@@ -26,12 +26,12 @@ async function pedirJson(url, opciones = {}) {
   return r.json();
 }
 
-async function desdeCkan({ dataset, recurso }) {
-  const { result } = await pedirJson(`${CKAN_API}?id=${encodeURIComponent(dataset)}`);
-  const candidatos = result.resources
-    .filter((r) => /geojson/i.test(r.format) || /\.geojson(\?|$)/i.test(r.url))
-    // Primero los que coinciden con el nombre esperado; el resto queda de reserva.
-    .sort((a, b) => coincide(b, recurso) - coincide(a, recurso));
+async function desdeCkan({ portal, dataset, recurso }) {
+  const { result } = await pedirJson(`${portal}/api/3/action/package_show?id=${encodeURIComponent(dataset)}`);
+  let candidatos = result.resources.filter((r) => /geojson/i.test(r.format) || /\.geojson(\?|$)/i.test(r.url));
+  // Si hay recursos con el nombre esperado se usan sólo esos; si no, cualquiera.
+  const esperados = candidatos.filter((r) => coincide(r, recurso));
+  if (esperados.length) candidatos = esperados;
   if (!candidatos.length) throw new Error(`el dataset "${dataset}" no tiene recursos GeoJSON`);
 
   // Un dataset puede tener varios GeoJSON (p. ej. estaciones y líneas): se usa
@@ -46,7 +46,8 @@ async function desdeCkan({ dataset, recurso }) {
       console.log(`  · ${r.name}: no está en coordenadas WGS84, se descarta`);
       continue;
     }
-    return { geojson, fuente: `Gobierno de la Ciudad de Buenos Aires — ${result.title}`, url: r.url };
+    const gobierno = portal.includes('buenosaires') ? 'Gobierno de la Ciudad de Buenos Aires' : 'Ministerio de Transporte de la Nación';
+    return { geojson, fuente: `${gobierno} — ${result.title} (${r.name})`, url: r.url };
   }
   throw new Error(`ningún GeoJSON de "${dataset}" trae recorridos`);
 }
@@ -77,14 +78,52 @@ async function desdeOverpass(consulta) {
   throw ultimoError;
 }
 
+// Todas las fuentes CKAN de una capa, sumadas. Una línea que ya vino de una
+// fuente anterior no se vuelve a agregar.
+async function desdeCkanCombinado(fuentes, soloCaba) {
+  const features = [];
+  const usadas = [];
+  const lineasVistas = new Set();
+  for (const fuente of fuentes) {
+    try {
+      const res = await desdeCkan(fuente);
+      const nuevas = new Set();
+      let agregados = 0;
+      for (const f of res.geojson.features) {
+        const linea = lineaDe(f.properties);
+        if (linea && lineasVistas.has(linea)) continue;
+        if (soloCaba && !pasaPorCaba(f)) continue;
+        if (linea) nuevas.add(linea);
+        features.push(f);
+        agregados++;
+      }
+      nuevas.forEach((l) => lineasVistas.add(l));
+      console.log(`  · ${agregados} recorridos de ${res.fuente}`);
+      usadas.push(res);
+    } catch (e) {
+      console.warn(`  ✗ ${fuente.dataset}: ${e.message}`);
+    }
+  }
+  if (!usadas.length) throw new Error('ninguna fuente respondió');
+  return {
+    geojson: { type: 'FeatureCollection', features },
+    fuente: usadas.map((u) => u.fuente).join('; '),
+    url: usadas.map((u) => u.url).join(' '),
+  };
+}
+
 async function descargar(capa, fuenteForzada) {
   const intentos = [];
-  if (capa.ckan && fuenteForzada !== 'overpass') intentos.push(['ckan', () => desdeCkan(capa.ckan)]);
+  if (capa.ckan && fuenteForzada !== 'overpass') {
+    if (capa.combinar) intentos.push(['ckan', () => desdeCkanCombinado(capa.ckan, capa.soloCaba)]);
+    else for (const f of capa.ckan) intentos.push(['ckan', () => desdeCkan(f)]);
+  }
   if (capa.overpass && fuenteForzada !== 'ckan') intentos.push(['overpass', () => desdeOverpass(capa.overpass)]);
 
   for (const [tipo, intento] of intentos) {
     try {
       const res = await intento();
+      if (capa.soloCaba) res.geojson.features = res.geojson.features.filter(pasaPorCaba);
       if (!res.geojson.features?.length) throw new Error('respuesta sin elementos');
       return { ...res, tipo };
     } catch (e) {
@@ -110,7 +149,7 @@ for (const capa of capas) {
     fallidas++;
     continue;
   }
-  const texto = JSON.stringify(redondear(res.geojson));
+  const texto = JSON.stringify(redondear(simplificar(res.geojson)));
   await writeFile(`${DESTINO}${capa.id}.geojson`, texto);
   manifiesto[capa.id] = {
     fuente: res.fuente,

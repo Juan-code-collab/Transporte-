@@ -1,9 +1,8 @@
-# Temporal: inspección de fuentes de datos. Se borra después.
+# Temporal: prueba la descarga real desde la rama. Se borra después.
 name: Diagnóstico de fuentes
 on:
   push:
     branches: ['claude/**']
-    paths: ['.diag/**', '.github/workflows/diagnostico.yml']
 jobs:
   diag:
     runs-on: ubuntu-latest
@@ -12,4 +11,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node .diag/diag.mjs
+      - run: npm ci && npm test
+      - run: npm run datos
+      - run: |
+          node --input-type=module -e '
+          import { readFileSync } from "fs";
+          import { lineaDe, jurisdiccionDe } from "./src/geo.js";
+          const d = JSON.parse(readFileSync("public/data/colectivos.geojson"));
+          const por = {};
+          for (const f of d.features) { const j = jurisdiccionDe(f.properties); (por[j] ??= new Set()).add(lineaDe(f.properties)); }
+          for (const [j, s] of Object.entries(por)) console.log(j, s.size, [...s].sort((a, b) => a - b).join(" "));'
+          ls -la public/data

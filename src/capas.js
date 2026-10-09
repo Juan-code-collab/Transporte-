@@ -2,13 +2,20 @@
 // el script de descarga (Node), por eso no depende del DOM ni de Leaflet.
 //
 // Cada capa se intenta obtener, en orden:
-//   1. `ckan`: dataset del portal de datos abiertos de la Ciudad
-//      (data.buenosaires.gob.ar). Se busca, dentro del dataset, el primer
-//      recurso GeoJSON cuyo nombre o URL coincida con `recurso`.
+//   1. `ckan`: lista de datasets de portales CKAN del Gobierno (Ciudad o
+//      Nación). En cada dataset se usa el recurso GeoJSON cuyo nombre o URL
+//      coincida con `recurso`. Sin `combinar`, gana la primera fuente que
+//      funcione; con `combinar`, se suman todas (y una línea que ya vino de una
+//      fuente anterior no se repite).
 //   2. `overpass`: consulta a OpenStreetMap vía Overpass API, como respaldo o
 //      cuando el Gobierno no publica la geometría (p. ej. autopistas).
+//
+// `soloCaba`: descarta recorridos que no pasan por la Ciudad.
 
-export const CKAN_API = 'https://data.buenosaires.gob.ar/api/3/action/package_show';
+export const PORTAL_CIUDAD = 'https://data.buenosaires.gob.ar';
+export const PORTAL_NACION = 'https://datos.transporte.gob.ar';
+// Dataset nacional "Recorridos de Líneas de Transporte de RMBA".
+const RMBA = 'recorridos-de-lineas-de-transporte-rmba-jn';
 // Servidores públicos de Overpass: si uno está saturado (504), se prueba el siguiente.
 export const OVERPASS_APIS = [
   'https://overpass-api.de/api/interpreter',
@@ -51,7 +58,10 @@ export const CAPAS = [
     color: '#233aa8',
     grosor: 5,
     visible: true,
-    ckan: { dataset: 'subte-estaciones', recurso: /l[ií]nea/i },
+    ckan: [
+      { portal: PORTAL_NACION, dataset: RMBA, recurso: /subterr[aá]neos? - l[ií]neas/i },
+      { portal: PORTAL_CIUDAD, dataset: 'subte-estaciones', recurso: /l[ií]nea/i },
+    ],
     overpass: consultaOverpass(
       [
         'relation["route"="subway"](area.caba);',
@@ -66,7 +76,7 @@ export const CAPAS = [
     color: '#5a3e1b',
     grosor: 4,
     visible: true,
-    ckan: { dataset: 'estaciones-ferrocarril', recurso: /red|l[ií]nea|recorrido/i },
+    ckan: [{ portal: PORTAL_CIUDAD, dataset: 'estaciones-ferrocarril', recurso: /red|l[ií]nea|recorrido/i }],
     overpass: consultaOverpass('relation["route"="train"](area.caba);'),
   },
   {
@@ -75,7 +85,17 @@ export const CAPAS = [
     color: '#e67e22',
     grosor: 2,
     visible: false, // es la capa más pesada; se activa a demanda
-    ckan: { dataset: 'colectivos-recorridos', recurso: /recorrido/i },
+    // Ciudad: las líneas de jurisdicción porteña. Nación: las de jurisdicción
+    // nacional y provincial del AMBA (sólo las que pasan por CABA). El archivo
+    // nacional todavía incluye líneas ya traspasadas a la Ciudad: como la
+    // Ciudad va primero, esas se toman de la Ciudad.
+    ckan: [
+      { portal: PORTAL_CIUDAD, dataset: 'colectivos-recorridos', recurso: /recorrido/i },
+      { portal: PORTAL_NACION, dataset: RMBA, recurso: /buses - l[ií]neas.*nacional/i },
+      { portal: PORTAL_NACION, dataset: RMBA, recurso: /buses - l[ií]neas.*provincial/i },
+    ],
+    combinar: true,
+    soloCaba: true,
     overpass: consultaOverpass('relation["route"="bus"](area.caba);'),
   },
   {
@@ -99,7 +119,7 @@ export const CAPAS = [
     color: '#27ae60',
     grosor: 3,
     visible: true,
-    ckan: { dataset: 'ciclovias', recurso: /ciclov/i },
+    ckan: [{ portal: PORTAL_CIUDAD, dataset: 'ciclovias', recurso: /ciclov/i }],
     overpass: consultaOverpass(
       [
         'way["highway"="cycleway"](area.caba);',

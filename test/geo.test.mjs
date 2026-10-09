@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { colorSubte, esWgs84, jurisdiccionDe, lineaDe, overpassAGeojson, redondear, soloLineas } from '../src/geo.js';
+import { colorSubte, esWgs84, jurisdiccionDe, lineaDe, overpassAGeojson, pasaPorCaba, redondear, simplificar, soloLineas } from '../src/geo.js';
 
 test('overpassAGeojson convierte vías y relaciones, ignorando paradas', () => {
   const geo = overpassAGeojson({
@@ -69,4 +69,20 @@ test('soloLineas descarta puntos (p. ej. estaciones)', () => {
     ],
   });
   assert.equal(geo.features.length, 1);
+});
+
+test('pasaPorCaba distingue recorridos dentro y fuera de la Ciudad', () => {
+  const l = (...pts) => ({ geometry: { type: 'LineString', coordinates: pts } });
+  assert.equal(pasaPorCaba(l([-58.3816, -34.6037], [-58.40, -34.61])), true); // Obelisco
+  assert.equal(pasaPorCaba(l([-58.522, -34.641], [-58.60, -34.65])), true); // Liniers → oeste
+  assert.equal(pasaPorCaba(l([-58.365, -34.663], [-58.30, -34.70])), false); // Avellaneda
+  assert.equal(pasaPorCaba(l([-58.565, -34.64], [-58.60, -34.70])), false); // Ramos Mejía
+  assert.equal(pasaPorCaba(l([-58.51, -34.47], [-58.55, -34.45])), false); // San Isidro
+});
+
+test('simplificar quita puntos alineados y conserva los extremos', () => {
+  const geo = simplificar({
+    features: [{ geometry: { type: 'LineString', coordinates: [[0, 0], [0.5, 0.0000001], [1, 0], [1, 1]] } }],
+  });
+  assert.deepEqual(geo.features[0].geometry.coordinates, [[0, 0], [1, 0], [1, 1]]);
 });

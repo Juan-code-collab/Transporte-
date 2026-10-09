@@ -39,10 +39,84 @@ export function soloLineas(geojson) {
   return { ...geojson, features };
 }
 
+// Contorno aproximado de la Ciudad (Av. General Paz, Riachuelo y costa del
+// Río de la Plata), en [lon, lat]. Alcanza para saber si un recorrido entra.
+export const CONTORNO_CABA = [
+  [-58.4605, -34.5345], [-58.4140, -34.5520], [-58.3780, -34.5700],
+  [-58.3500, -34.5950], [-58.3300, -34.6150], [-58.3480, -34.6370],
+  [-58.3700, -34.6560], [-58.4000, -34.6560], [-58.4300, -34.6680],
+  [-58.4620, -34.7050], [-58.4900, -34.6800], [-58.5290, -34.6450],
+  [-58.5310, -34.6150], [-58.5050, -34.5800], [-58.4880, -34.5500],
+];
+
+function dentro([x, y], poligono) {
+  let adentro = false;
+  for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+    const [xi, yi] = poligono[i];
+    const [xj, yj] = poligono[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) adentro = !adentro;
+  }
+  return adentro;
+}
+
+// ¿Algún punto del recorrido cae dentro de la Ciudad?
+export function pasaPorCaba(feature) {
+  const puntos = [];
+  const juntar = (a) => (typeof a[0] === 'number' ? puntos.push(a) : a.forEach(juntar));
+  juntar(feature.geometry?.coordinates ?? []);
+  return puntos.some((p) => dentro(p, CONTORNO_CABA));
+}
+
+// Simplifica las líneas (Douglas-Peucker) para achicar archivos y acelerar el
+// dibujo. Tolerancia en grados: 0.00002 ≈ 2 m.
+export function simplificar(geojson, tolerancia = 0.00002) {
+  const t2 = tolerancia * tolerancia;
+  const linea = (pts) => {
+    if (pts.length < 3) return pts;
+    const marcar = new Uint8Array(pts.length);
+    marcar[0] = marcar[pts.length - 1] = 1;
+    const pila = [[0, pts.length - 1]];
+    while (pila.length) {
+      const [a, b] = pila.pop();
+      let max = 0;
+      let idx = -1;
+      for (let i = a + 1; i < b; i++) {
+        const d = distancia2(pts[i], pts[a], pts[b]);
+        if (d > max) [max, idx] = [d, i];
+      }
+      if (max > t2) {
+        marcar[idx] = 1;
+        pila.push([a, idx], [idx, b]);
+      }
+    }
+    return pts.filter((_, i) => marcar[i]);
+  };
+  for (const f of geojson.features ?? []) {
+    const g = f.geometry;
+    if (g?.type === 'LineString') g.coordinates = linea(g.coordinates);
+    if (g?.type === 'MultiLineString') g.coordinates = g.coordinates.map(linea);
+  }
+  return geojson;
+}
+
+function distancia2([x, y], [x1, y1], [x2, y2]) {
+  let dx = x2 - x1;
+  let dy = y2 - y1;
+  if (dx || dy) {
+    const t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)));
+    x1 += t * dx;
+    y1 += t * dy;
+  }
+  dx = x - x1;
+  dy = y - y1;
+  return dx * dx + dy * dy;
+}
+
 // Redondea coordenadas a 6 decimales (~10 cm) para achicar los archivos.
 export function redondear(geojson, decimales = 6) {
   const f = 10 ** decimales;
-  const r = (c) => (typeof c[0] === 'number' ? c.map((n) => Math.round(n * f) / f) : c.map(r));
+  // Además descarta la altura (z) si viene: sólo se usa lon/lat.
+  const r = (c) => (typeof c[0] === 'number' ? c.slice(0, 2).map((n) => Math.round(n * f) / f) : c.map(r));
   for (const feat of geojson.features ?? []) {
     if (feat.geometry?.coordinates) feat.geometry.coordinates = r(feat.geometry.coordinates);
   }
@@ -64,7 +138,7 @@ export function esWgs84(geojson) {
 }
 
 const CAMPOS_LINEA = [
-  'linea', 'LINEA', 'Linea', 'lineas', 'LINEAS', 'line', 'LINE', 'ref',
+  'linea', 'LINEA', 'Linea', 'LINEASUB', 'lineas', 'LINEAS', 'line', 'LINE', 'ref',
   'route_short_name', 'nombre', 'NOMBRE', 'name',
 ];
 const CAMPOS_JURISDICCION = [
