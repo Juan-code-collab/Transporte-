@@ -3,7 +3,7 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { CAPAS, OVERPASS_APIS } from './capas.js';
 import { capasGoogle } from './google.js';
-import { colorSubte, jurisdiccionDe, lineaDe, normalizarLinea, overpassAGeojson, soloLineas } from './geo.js';
+import { colorSubte, jurisdiccionDe, lineaDe, normalizarLinea, overpassAGeojson, pasaPorCaba, soloLineas } from './geo.js';
 
 const DATOS = `${import.meta.env.BASE_URL}data/`;
 
@@ -87,7 +87,9 @@ async function cargar(capa, avisar) {
       const r = await fetch(servidor, { method: 'POST', body: new URLSearchParams({ data: capa.overpass }) });
       if (!r.ok) throw new Error(`Overpass respondió ${r.status}`);
       fuentes.osmEnVivo = true;
-      return soloLineas(overpassAGeojson(await r.json()));
+      const geojson = soloLineas(overpassAGeojson(await r.json()));
+      if (capa.soloCaba) geojson.features = geojson.features.filter(pasaPorCaba);
+      return geojson;
     } catch (e) {
       ultimoError = e;
     }

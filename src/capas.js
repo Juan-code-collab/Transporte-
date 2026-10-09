@@ -23,12 +23,13 @@ export const OVERPASS_APIS = [
   'https://overpass.kumi.systems/api/interpreter',
 ];
 
-// Área de la Ciudad Autónoma de Buenos Aires en OpenStreetMap.
-const AREA_CABA =
-  'area["boundary"="administrative"]["admin_level"="4"]["name"="Ciudad Autónoma de Buenos Aires"]->.caba;';
+// Rectángulo que contiene a la Ciudad (sur, oeste, norte, este). Es mucho más
+// liviano para Overpass que buscar el límite administrativo; lo que queda
+// afuera de CABA se recorta después con `soloCaba`.
+const BBOX_CABA = '-34.71,-58.54,-34.52,-58.33';
 
 export function consultaOverpass(cuerpo) {
-  return `[out:json][timeout:300];\n${AREA_CABA}\n(\n${cuerpo}\n);\nout geom;`;
+  return `[out:json][timeout:180][bbox:${BBOX_CABA}];\n(\n${cuerpo}\n);\nout geom;`;
 }
 
 // Colores oficiales de las líneas de subte (respaldo si el dato no trae color).
@@ -64,9 +65,9 @@ export const CAPAS = [
     ],
     overpass: consultaOverpass(
       [
-        'relation["route"="subway"](area.caba);',
-        'relation["route"="light_rail"](area.caba);',
-        'relation["route"="tram"](area.caba);',
+        'relation["route"="subway"];',
+        'relation["route"="light_rail"];',
+        'relation["route"="tram"];',
       ].join('\n'),
     ),
   },
@@ -77,7 +78,7 @@ export const CAPAS = [
     grosor: 4,
     visible: true,
     ckan: [{ portal: PORTAL_CIUDAD, dataset: 'estaciones-ferrocarril', recurso: /red|l[ií]nea|recorrido/i }],
-    overpass: consultaOverpass('relation["route"="train"](area.caba);'),
+    overpass: consultaOverpass('relation["route"="train"];'),
   },
   {
     id: 'colectivos',
@@ -96,7 +97,7 @@ export const CAPAS = [
     ],
     combinar: true,
     soloCaba: true,
-    overpass: consultaOverpass('relation["route"="bus"](area.caba);'),
+    overpass: consultaOverpass('relation["route"="bus"];'),
   },
   {
     id: 'autopistas',
@@ -106,10 +107,11 @@ export const CAPAS = [
     visible: true,
     // El portal de la Ciudad no publica el trazado de autopistas como GeoJSON,
     // así que se toma de OpenStreetMap.
+    soloCaba: true,
     overpass: consultaOverpass(
       [
-        'way["highway"="motorway"](area.caba);',
-        'way["highway"="trunk"]["motorroad"="yes"](area.caba);',
+        'way["highway"="motorway"];',
+        'way["highway"="trunk"]["motorroad"="yes"];',
       ].join('\n'),
     ),
   },
@@ -122,11 +124,11 @@ export const CAPAS = [
     ckan: [{ portal: PORTAL_CIUDAD, dataset: 'ciclovias', recurso: /ciclov/i }],
     overpass: consultaOverpass(
       [
-        'way["highway"="cycleway"](area.caba);',
-        'way["cycleway"~"^(lane|track)$"](area.caba);',
-        'way["cycleway:left"~"^(lane|track)$"](area.caba);',
-        'way["cycleway:right"~"^(lane|track)$"](area.caba);',
-        'way["cycleway:both"~"^(lane|track)$"](area.caba);',
+        'way["highway"="cycleway"];',
+        'way["cycleway"~"^(lane|track)$"];',
+        'way["cycleway:left"~"^(lane|track)$"];',
+        'way["cycleway:right"~"^(lane|track)$"];',
+        'way["cycleway:both"~"^(lane|track)$"];',
       ].join('\n'),
     ),
   },
