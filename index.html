@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transporte CABA</title>
+    <meta name="description" content="Mapa de la Ciudad de Buenos Aires con subtes, colectivos, trenes, autopistas y ciclovías." />
+  </head>
+  <body>
+    <aside id="panel">
+      <header>
+        <h1>Transporte CABA</h1>
+        <button id="plegar" type="button" aria-expanded="true" aria-controls="contenido">Ocultar</button>
+      </header>
+      <div id="contenido">
+        <section>
+          <h2>Capas</h2>
+          <ul id="capas"></ul>
+        </section>
+
+        <section id="filtro-colectivos" hidden>
+          <h2>Colectivos</h2>
+          <label>
+            Líneas
+            <input id="filtro-linea" type="search" inputmode="numeric" placeholder="Ej.: 60, 152" autocomplete="off" />
+          </label>
+          <label>
+            Jurisdicción
+            <select id="filtro-jurisdiccion">
+              <option value="">Todas</option>
+              <option value="ciudad">Ciudad</option>
+              <option value="nacional">Nacional (JN)</option>
+              <option value="provincial">Provincial</option>
+            </select>
+          </label>
+          <ul class="leyenda" id="leyenda-colectivos"></ul>
+          <p class="resumen" id="resumen-colectivos"></p>
+        </section>
+
+        <footer id="fuentes"></footer>
+      </div>
+    </aside>
+    <main id="mapa" aria-label="Mapa de transporte de la Ciudad de Buenos Aires"></main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
