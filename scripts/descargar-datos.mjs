@@ -20,13 +20,39 @@ function argumento(nombre) {
   return i >= 0 ? process.argv[i + 1] : null;
 }
 
-async function pedirJson(url, opciones = {}) {
-  const r = await fetch(url, { ...opciones, headers: { 'User-Agent': AGENTE, ...opciones.headers } });
-  if (!r.ok) throw new Error(`HTTP ${r.status} en ${url}`);
-  return r.json();
+// Los portales a veces responden con una página de error en vez de datos:
+// se reintenta hasta 3 veces, esperando cada vez un poco más.
+async function pedirJson(url, opciones = {}, intentos = 3) {
+  for (let i = 1; ; i++) {
+    try {
+      const r = await fetch(url, { ...opciones, headers: { 'User-Agent': AGENTE, ...opciones.headers } });
+      if (!r.ok) throw new Error(`HTTP ${r.status} en ${url}`);
+      const texto = await r.text();
+      try {
+        return JSON.parse(texto);
+      } catch {
+        throw new Error(`${url} no devolvió JSON`);
+      }
+    } catch (e) {
+      if (i >= intentos) throw e;
+      await new Promise((ok) => setTimeout(ok, 3000 * i));
+    }
+  }
 }
 
-async function desdeCkan({ portal, dataset, recurso }) {
+async function desdeCkan(fuente) {
+  try {
+    return await desdeCkanApi(fuente);
+  } catch (e) {
+    if (!fuente.respaldo) throw e;
+    console.log(`  · ${e.message}; se usa el archivo directo`);
+    const geojson = soloLineas(await pedirJson(fuente.respaldo));
+    if (!geojson.features.length || !esWgs84(geojson)) throw e;
+    return { geojson, fuente: `Gobierno de la Ciudad de Buenos Aires — ${fuente.dataset}`, url: fuente.respaldo };
+  }
+}
+
+async function desdeCkanApi({ portal, dataset, recurso }) {
   const { result } = await pedirJson(`${portal}/api/3/action/package_show?id=${encodeURIComponent(dataset)}`);
   let candidatos = result.resources.filter((r) => /geojson/i.test(r.format) || /\.geojson(\?|$)/i.test(r.url));
   // Si hay recursos con el nombre esperado se usan sólo esos; si no, cualquiera.
@@ -38,7 +64,7 @@ async function desdeCkan({ portal, dataset, recurso }) {
   // el primero que traiga recorridos.
   for (const r of candidatos) {
     const geojson = soloLineas(await pedirJson(r.url));
-    if (!geojson.features.length) {
+    if (!geojson.features?.length) {
       console.log(`  · ${r.name}: sin recorridos (sólo puntos), se descarta`);
       continue;
     }
@@ -60,11 +86,15 @@ async function desdeOverpass(consulta) {
   let ultimoError;
   for (const servidor of OVERPASS_APIS) {
     try {
-      const respuesta = await pedirJson(servidor, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ data: consulta }),
-      });
+      const respuesta = await pedirJson(
+        servidor,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ data: consulta }),
+        },
+        1,
+      );
       return {
         geojson: soloLineas(overpassAGeojson(respuesta)),
         fuente: '© colaboradores de OpenStreetMap (ODbL)',

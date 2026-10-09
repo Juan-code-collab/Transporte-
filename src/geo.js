@@ -170,23 +170,21 @@ export function normalizarLinea(texto) {
 
 // 'ciudad' | 'nacional' | 'provincial' | 'municipal' | null
 export function jurisdiccionDe(props) {
+  // Las líneas traspasadas a la Ciudad figuran como nacionales en el dataset
+  // nacional: la lista de la Ciudad manda.
+  const linea = lineaDe(props);
+  if (linea && LINEAS_JURISDICCION_CIUDAD.includes(linea)) return 'ciudad';
   const v = primerCampo(props, CAMPOS_JURISDICCION);
   if (v) {
-    const t = v.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const t = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     if (/nac|\bjn\b/.test(t)) return 'nacional';
     if (/ciud|caba|autonoma/.test(t)) return 'ciudad';
     if (/prov|pba/.test(t)) return 'provincial';
     if (/muni/.test(t)) return 'municipal';
   }
-  // Sin dato explícito: inferimos por número de línea. En el AMBA, las líneas
-  // 1–199 son (o fueron) de jurisdicción nacional; las traspasadas a la Ciudad
-  // figuran en LINEAS_JURISDICCION_CIUDAD.
-  const linea = lineaDe(props);
-  if (linea && /^\d+$/.test(linea)) {
-    if (LINEAS_JURISDICCION_CIUDAD.includes(linea)) return 'ciudad';
-    if (Number(linea) < 200) return 'nacional';
-    return 'provincial';
-  }
+  // Sin dato explícito (p. ej. OpenStreetMap): en el AMBA, las líneas 1–199
+  // son nacionales y las de 200 en adelante, provinciales o municipales.
+  if (linea && /^\d+$/.test(linea)) return Number(linea) < 200 ? 'nacional' : 'provincial';
   return null;
 }
 

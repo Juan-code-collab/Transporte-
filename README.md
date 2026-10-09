@@ -4,9 +4,9 @@ Mapa interactivo de la Ciudad de Buenos Aires con los recorridos de:
 
 | Capa | Fuente principal | Respaldo |
 | --- | --- | --- |
-| Subte y Premetro | [Subte – estaciones y líneas](https://data.buenosaires.gob.ar/dataset/subte-estaciones) (GCBA) | OpenStreetMap |
-| Trenes | [Estaciones y red de ferrocarril](https://data.buenosaires.gob.ar/dataset/estaciones-ferrocarril) (GCBA) | OpenStreetMap |
-| Colectivos (Ciudad, Nacional y Provincial) | [Recorridos de colectivos](https://data.buenosaires.gob.ar/dataset/colectivos-recorridos) (GCBA) | OpenStreetMap |
+| Subte | [Recorridos RMBA](https://datos.transporte.gob.ar/dataset/recorridos-de-lineas-de-transporte-rmba-jn) (Nación) | GCBA, OpenStreetMap |
+| Trenes | [Estaciones y red de ferrocarril](https://data.buenosaires.gob.ar/dataset/estaciones-ferrocarril) (GCBA) | Nación, OpenStreetMap |
+| Colectivos (Ciudad, Nacional y Provincial) | [Recorridos de colectivos](https://data.buenosaires.gob.ar/dataset/colectivos-recorridos) (GCBA) + [Recorridos RMBA](https://datos.transporte.gob.ar/dataset/recorridos-de-lineas-de-transporte-rmba-jn) (Nación) | OpenStreetMap |
 | Autopistas | OpenStreetMap (el GCBA no publica el trazado) | — |
 | Ciclovías | [Ciclovías](https://data.buenosaires.gob.ar/dataset/ciclovias) (GCBA) | OpenStreetMap |
 
@@ -76,11 +76,16 @@ En tu compu: creá un archivo `.env.local` con
 
 ## Notas sobre los datos
 
-- La jurisdicción de cada colectivo se toma del campo del dataset cuando existe.
-  Si no, se infiere por número: las líneas de `LINEAS_JURISDICCION_CIUDAD`
-  (en `src/capas.js`) son de la Ciudad, el resto de 1–199 Nacionales y 200+
-  Provinciales. **Esa lista es aproximada: conviene verificarla** contra la
-  fuente oficial.
+- Colectivos: las líneas de jurisdicción de la Ciudad salen del dataset
+  [Colectivos: recorridos](https://data.buenosaires.gob.ar/dataset/colectivos-recorridos)
+  del GCBA; las nacionales y provinciales, del dataset
+  [Recorridos de Líneas de Transporte de RMBA](https://datos.transporte.gob.ar/dataset/recorridos-de-lineas-de-transporte-rmba-jn)
+  del Ministerio de Transporte, quedándose sólo con los recorridos que pasan
+  por CABA. El dataset nacional todavía lista como nacionales las líneas que
+  pasaron a la Ciudad; por eso `LINEAS_JURISDICCION_CIUDAD` (en
+  `src/capas.js`) tiene prioridad. Si la Ciudad suma o traspasa líneas, hay que
+  actualizar esa lista.
+- Los números de línea se muestran sin ceros adelante (`004` → `4`).
 - Las URLs de los datasets se resuelven por nombre a través de la API CKAN del
   portal, así que siguen funcionando aunque el GCBA cambie los archivos. Si
   cambia el nombre de un dataset, editá `ckan.dataset` en `src/capas.js`.

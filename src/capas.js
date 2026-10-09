@@ -43,13 +43,13 @@ export const COLORES_SUBTE = {
   P: '#ffa500', // Premetro
 };
 
-// Líneas de colectivo bajo jurisdicción de la Ciudad (traspasadas desde Nación
-// en 2019). Sólo se usa cuando el dato no trae un campo de jurisdicción.
-// Verificar contra la fuente oficial: la lista puede cambiar.
+// Líneas de colectivo de jurisdicción de la Ciudad, según el dataset
+// "Colectivos: recorridos" del GCBA (octubre 2026). El dataset nacional todavía
+// las lista como nacionales, así que esta lista tiene prioridad.
 export const LINEAS_JURISDICCION_CIUDAD = [
-  '4', '6', '7', '12', '25', '26', '34', '39', '42', '44', '47', '49', '50',
-  '64', '65', '68', '76', '84', '90', '99', '102', '106', '107', '108', '109',
-  '115', '118', '132', '146', '151', '158',
+  '4', '7', '12', '25', '26', '34', '39', '42', '44', '47', '50', '64', '65',
+  '68', '76', '84', '99', '102', '106', '107', '108', '109', '118', '132', '151',
+  'EBUS',
 ];
 
 export const CAPAS = [
@@ -77,7 +77,10 @@ export const CAPAS = [
     color: '#5a3e1b',
     grosor: 4,
     visible: true,
-    ckan: [{ portal: PORTAL_CIUDAD, dataset: 'estaciones-ferrocarril', recurso: /red|l[ií]nea|recorrido/i }],
+    ckan: [
+      { portal: PORTAL_CIUDAD, dataset: 'estaciones-ferrocarril', recurso: /red|l[ií]nea|recorrido/i },
+      { portal: PORTAL_NACION, dataset: RMBA, recurso: /ferrocarril - l[ií]neas/i },
+    ],
     overpass: consultaOverpass('relation["route"="train"];'),
   },
   {
@@ -91,7 +94,14 @@ export const CAPAS = [
     // nacional todavía incluye líneas ya traspasadas a la Ciudad: como la
     // Ciudad va primero, esas se toman de la Ciudad.
     ckan: [
-      { portal: PORTAL_CIUDAD, dataset: 'colectivos-recorridos', recurso: /recorrido/i },
+      {
+        portal: PORTAL_CIUDAD,
+        dataset: 'colectivos-recorridos',
+        recurso: /recorrido/i,
+        // Si la API del portal falla, se baja el archivo directo.
+        respaldo:
+          'https://cdn.buenosaires.gob.ar/datosabiertos/datasets/transporte-y-obras-publicas/colectivos-recorridos/recorrido-colectivos.geojson',
+      },
       { portal: PORTAL_NACION, dataset: RMBA, recurso: /buses - l[ií]neas.*nacional/i },
       { portal: PORTAL_NACION, dataset: RMBA, recurso: /buses - l[ií]neas.*provincial/i },
     ],

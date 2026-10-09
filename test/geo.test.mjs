@@ -38,6 +38,7 @@ test('lineaDe normaliza distintos formatos', () => {
 test('jurisdiccionDe usa el campo explícito y si no infiere por número', () => {
   assert.equal(jurisdiccionDe({ linea: '60', jurisdiccion: 'Nacional' }), 'nacional');
   assert.equal(jurisdiccionDe({ linea: '60', JURISDICCION: 'Ciudad Autónoma' }), 'ciudad');
+  assert.equal(jurisdiccionDe({ LINEA: '4', JURISDICCI: 'Nacional' }), 'ciudad'); // traspasada
   assert.equal(jurisdiccionDe({ linea: '7' }), 'ciudad');
   assert.equal(jurisdiccionDe({ linea: '007' }), 'ciudad');
   assert.equal(jurisdiccionDe({ linea: '60' }), 'nacional');

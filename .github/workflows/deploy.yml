@@ -29,7 +29,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      # Si alguna fuente falla, la app consulta OpenStreetMap en vivo para esa capa.
+      # Parte de lo ya publicado: si una fuente falla, esa capa conserva los
+      # datos anteriores en vez de quedar vacía.
+      - name: Traer datos publicados
+        run: |
+          base="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/data"
+          for f in manifest.json subte.geojson trenes.geojson colectivos.geojson autopistas.geojson ciclovias.geojson; do
+            curl -fsSL -o "public/data/$f" "$base/$f" || rm -f "public/data/$f"
+          done
+      # Si alguna fuente falla y no hay datos previos, la app consulta
+      # OpenStreetMap en vivo para esa capa.
       - run: npm run datos
         continue-on-error: true
       - run: npm run build
