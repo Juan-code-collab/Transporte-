@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { colorSubte, esWgs84, jurisdiccionDe, lineaDe, overpassAGeojson, redondear } from '../src/geo.js';
+import { colorSubte, esWgs84, jurisdiccionDe, lineaDe, overpassAGeojson, pasaPorCaba, redondear, simplificar, soloLineas } from '../src/geo.js';
 
 test('overpassAGeojson convierte vías y relaciones, ignorando paradas', () => {
   const geo = overpassAGeojson({
@@ -30,13 +30,17 @@ test('lineaDe normaliza distintos formatos', () => {
   assert.equal(lineaDe({ linea: 'Línea 60' }), '60');
   assert.equal(lineaDe({ LINEA: 152 }), '152');
   assert.equal(lineaDe({ ref: 'H' }), 'H');
+  assert.equal(lineaDe({ linea: '004' }), '4');
+  assert.equal(lineaDe({ LINEA: 'LINEA 032' }), '32');
   assert.equal(lineaDe({}), null);
 });
 
 test('jurisdiccionDe usa el campo explícito y si no infiere por número', () => {
   assert.equal(jurisdiccionDe({ linea: '60', jurisdiccion: 'Nacional' }), 'nacional');
   assert.equal(jurisdiccionDe({ linea: '60', JURISDICCION: 'Ciudad Autónoma' }), 'ciudad');
+  assert.equal(jurisdiccionDe({ LINEA: '4', JURISDICCI: 'Nacional' }), 'ciudad'); // traspasada
   assert.equal(jurisdiccionDe({ linea: '7' }), 'ciudad');
+  assert.equal(jurisdiccionDe({ linea: '007' }), 'ciudad');
   assert.equal(jurisdiccionDe({ linea: '60' }), 'nacional');
   assert.equal(jurisdiccionDe({ linea: '338' }), 'provincial');
 });
@@ -55,4 +59,31 @@ test('esWgs84 detecta coordenadas planas', () => {
 test('redondear recorta decimales en geometrías anidadas', () => {
   const geo = redondear({ features: [{ geometry: { coordinates: [[[-58.123456789, -34.987654321]]] } }] });
   assert.deepEqual(geo.features[0].geometry.coordinates, [[[-58.123457, -34.987654]]]);
+});
+
+test('soloLineas descarta puntos (p. ej. estaciones)', () => {
+  const geo = soloLineas({
+    type: 'FeatureCollection',
+    features: [
+      { geometry: { type: 'Point', coordinates: [-58.4, -34.6] } },
+      { geometry: { type: 'MultiLineString', coordinates: [[[-58.4, -34.6], [-58.5, -34.7]]] } },
+    ],
+  });
+  assert.equal(geo.features.length, 1);
+});
+
+test('pasaPorCaba distingue recorridos dentro y fuera de la Ciudad', () => {
+  const l = (...pts) => ({ geometry: { type: 'LineString', coordinates: pts } });
+  assert.equal(pasaPorCaba(l([-58.3816, -34.6037], [-58.40, -34.61])), true); // Obelisco
+  assert.equal(pasaPorCaba(l([-58.522, -34.641], [-58.60, -34.65])), true); // Liniers → oeste
+  assert.equal(pasaPorCaba(l([-58.365, -34.663], [-58.30, -34.70])), false); // Avellaneda
+  assert.equal(pasaPorCaba(l([-58.565, -34.64], [-58.60, -34.70])), false); // Ramos Mejía
+  assert.equal(pasaPorCaba(l([-58.51, -34.47], [-58.55, -34.45])), false); // San Isidro
+});
+
+test('simplificar quita puntos alineados y conserva los extremos', () => {
+  const geo = simplificar({
+    features: [{ geometry: { type: 'LineString', coordinates: [[0, 0], [0.5, 0.0000001], [1, 0], [1, 1]] } }],
+  });
+  assert.deepEqual(geo.features[0].geometry.coordinates, [[0, 0], [1, 0], [1, 1]]);
 });

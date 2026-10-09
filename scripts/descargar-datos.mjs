@@ -9,8 +9,8 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { CAPAS, CKAN_API, OVERPASS_API } from '../src/capas.js';
-import { esWgs84, overpassAGeojson, redondear } from '../src/geo.js';
+import { CAPAS, OVERPASS_APIS } from '../src/capas.js';
+import { esWgs84, lineaDe, overpassAGeojson, pasaPorCaba, redondear, simplificar, soloLineas } from '../src/geo.js';
 
 const DESTINO = fileURLToPath(new URL('../public/data/', import.meta.url));
 const AGENTE = 'transporte-caba/0.1 (mapa de transporte de Buenos Aires)';
@@ -20,45 +20,140 @@ function argumento(nombre) {
   return i >= 0 ? process.argv[i + 1] : null;
 }
 
-async function pedirJson(url, opciones = {}) {
-  const r = await fetch(url, { ...opciones, headers: { 'User-Agent': AGENTE, ...opciones.headers } });
-  if (!r.ok) throw new Error(`HTTP ${r.status} en ${url}`);
-  return r.json();
+// Los portales a veces responden con una página de error en vez de datos:
+// se reintenta hasta 3 veces, esperando cada vez un poco más.
+async function pedirJson(url, opciones = {}, intentos = 3) {
+  for (let i = 1; ; i++) {
+    try {
+      const r = await fetch(url, { ...opciones, headers: { 'User-Agent': AGENTE, ...opciones.headers } });
+      if (!r.ok) throw new Error(`HTTP ${r.status} en ${url}`);
+      const texto = await r.text();
+      try {
+        return JSON.parse(texto);
+      } catch {
+        throw new Error(`${url} no devolvió JSON`);
+      }
+    } catch (e) {
+      if (i >= intentos) throw e;
+      await new Promise((ok) => setTimeout(ok, 3000 * i));
+    }
+  }
 }
 
-async function desdeCkan({ dataset, recurso }) {
-  const { result } = await pedirJson(`${CKAN_API}?id=${encodeURIComponent(dataset)}`);
-  const candidatos = result.resources.filter(
-    (r) => /geojson/i.test(r.format) || /\.geojson(\?|$)/i.test(r.url),
-  );
-  const elegido = candidatos.find((r) => recurso.test(r.name) || recurso.test(r.url)) ?? candidatos[0];
-  if (!elegido) throw new Error(`el dataset "${dataset}" no tiene recursos GeoJSON`);
-  const geojson = await pedirJson(elegido.url);
-  if (!esWgs84(geojson)) throw new Error(`${elegido.url} no está en coordenadas WGS84`);
-  return { geojson, fuente: `Gobierno de la Ciudad de Buenos Aires — ${result.title}`, url: elegido.url };
+async function desdeCkan(fuente) {
+  try {
+    return await desdeCkanApi(fuente);
+  } catch (e) {
+    if (!fuente.respaldo) throw e;
+    console.log(`  · ${e.message}; se usa el archivo directo`);
+    const geojson = soloLineas(await pedirJson(fuente.respaldo));
+    if (!geojson.features.length || !esWgs84(geojson)) throw e;
+    return { geojson, fuente: `Gobierno de la Ciudad de Buenos Aires — ${fuente.dataset}`, url: fuente.respaldo };
+  }
+}
+
+async function desdeCkanApi({ portal, dataset, recurso }) {
+  const { result } = await pedirJson(`${portal}/api/3/action/package_show?id=${encodeURIComponent(dataset)}`);
+  let candidatos = result.resources.filter((r) => /geojson/i.test(r.format) || /\.geojson(\?|$)/i.test(r.url));
+  // Si hay recursos con el nombre esperado se usan sólo esos; si no, cualquiera.
+  const esperados = candidatos.filter((r) => coincide(r, recurso));
+  if (esperados.length) candidatos = esperados;
+  if (!candidatos.length) throw new Error(`el dataset "${dataset}" no tiene recursos GeoJSON`);
+
+  // Un dataset puede tener varios GeoJSON (p. ej. estaciones y líneas): se usa
+  // el primero que traiga recorridos.
+  for (const r of candidatos) {
+    const geojson = soloLineas(await pedirJson(r.url));
+    if (!geojson.features?.length) {
+      console.log(`  · ${r.name}: sin recorridos (sólo puntos), se descarta`);
+      continue;
+    }
+    if (!esWgs84(geojson)) {
+      console.log(`  · ${r.name}: no está en coordenadas WGS84, se descarta`);
+      continue;
+    }
+    const gobierno = portal.includes('buenosaires') ? 'Gobierno de la Ciudad de Buenos Aires' : 'Ministerio de Transporte de la Nación';
+    return { geojson, fuente: `${gobierno} — ${result.title} (${r.name})`, url: r.url };
+  }
+  throw new Error(`ningún GeoJSON de "${dataset}" trae recorridos`);
+}
+
+function coincide(r, recurso) {
+  return Number(recurso.test(r.name) || recurso.test(r.url));
 }
 
 async function desdeOverpass(consulta) {
-  const respuesta = await pedirJson(OVERPASS_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ data: consulta }),
-  });
+  let ultimoError;
+  for (const servidor of OVERPASS_APIS) {
+    try {
+      const respuesta = await pedirJson(
+        servidor,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ data: consulta }),
+        },
+        1,
+      );
+      return {
+        geojson: soloLineas(overpassAGeojson(respuesta)),
+        fuente: '© colaboradores de OpenStreetMap (ODbL)',
+        url: servidor,
+      };
+    } catch (e) {
+      console.log(`  · ${e.message}`);
+      ultimoError = e;
+    }
+  }
+  throw ultimoError;
+}
+
+// Todas las fuentes CKAN de una capa, sumadas. Una línea que ya vino de una
+// fuente anterior no se vuelve a agregar.
+async function desdeCkanCombinado(fuentes, soloCaba) {
+  const features = [];
+  const usadas = [];
+  const lineasVistas = new Set();
+  for (const fuente of fuentes) {
+    try {
+      const res = await desdeCkan(fuente);
+      const nuevas = new Set();
+      let agregados = 0;
+      for (const f of res.geojson.features) {
+        const linea = lineaDe(f.properties);
+        if (linea && lineasVistas.has(linea)) continue;
+        if (soloCaba && !pasaPorCaba(f)) continue;
+        if (linea) nuevas.add(linea);
+        features.push(f);
+        agregados++;
+      }
+      nuevas.forEach((l) => lineasVistas.add(l));
+      console.log(`  · ${agregados} recorridos de ${res.fuente}`);
+      usadas.push(res);
+    } catch (e) {
+      console.warn(`  ✗ ${fuente.dataset}: ${e.message}`);
+    }
+  }
+  if (!usadas.length) throw new Error('ninguna fuente respondió');
   return {
-    geojson: overpassAGeojson(respuesta),
-    fuente: '© colaboradores de OpenStreetMap (ODbL)',
-    url: OVERPASS_API,
+    geojson: { type: 'FeatureCollection', features },
+    fuente: usadas.map((u) => u.fuente).join('; '),
+    url: usadas.map((u) => u.url).join(' '),
   };
 }
 
 async function descargar(capa, fuenteForzada) {
   const intentos = [];
-  if (capa.ckan && fuenteForzada !== 'overpass') intentos.push(['ckan', () => desdeCkan(capa.ckan)]);
+  if (capa.ckan && fuenteForzada !== 'overpass') {
+    if (capa.combinar) intentos.push(['ckan', () => desdeCkanCombinado(capa.ckan, capa.soloCaba)]);
+    else for (const f of capa.ckan) intentos.push(['ckan', () => desdeCkan(f)]);
+  }
   if (capa.overpass && fuenteForzada !== 'ckan') intentos.push(['overpass', () => desdeOverpass(capa.overpass)]);
 
   for (const [tipo, intento] of intentos) {
     try {
       const res = await intento();
+      if (capa.soloCaba) res.geojson.features = res.geojson.features.filter(pasaPorCaba);
       if (!res.geojson.features?.length) throw new Error('respuesta sin elementos');
       return { ...res, tipo };
     } catch (e) {
@@ -84,7 +179,7 @@ for (const capa of capas) {
     fallidas++;
     continue;
   }
-  const texto = JSON.stringify(redondear(res.geojson));
+  const texto = JSON.stringify(redondear(simplificar(res.geojson)));
   await writeFile(`${DESTINO}${capa.id}.geojson`, texto);
   manifiesto[capa.id] = {
     fuente: res.fuente,

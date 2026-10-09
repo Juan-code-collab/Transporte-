@@ -4,9 +4,9 @@ Mapa interactivo de la Ciudad de Buenos Aires con los recorridos de:
 
 | Capa | Fuente principal | Respaldo |
 | --- | --- | --- |
-| Subte y Premetro | [Subte – estaciones y líneas](https://data.buenosaires.gob.ar/dataset/subte-estaciones) (GCBA) | OpenStreetMap |
-| Trenes | [Estaciones y red de ferrocarril](https://data.buenosaires.gob.ar/dataset/estaciones-ferrocarril) (GCBA) | OpenStreetMap |
-| Colectivos (Ciudad, Nacional y Provincial) | [Recorridos de colectivos](https://data.buenosaires.gob.ar/dataset/colectivos-recorridos) (GCBA) | OpenStreetMap |
+| Subte | [Recorridos RMBA](https://datos.transporte.gob.ar/dataset/recorridos-de-lineas-de-transporte-rmba-jn) (Nación) | GCBA, OpenStreetMap |
+| Trenes | [Estaciones y red de ferrocarril](https://data.buenosaires.gob.ar/dataset/estaciones-ferrocarril) (GCBA) | Nación, OpenStreetMap |
+| Colectivos (Ciudad, Nacional y Provincial) | [Recorridos de colectivos](https://data.buenosaires.gob.ar/dataset/colectivos-recorridos) (GCBA) + [Recorridos RMBA](https://datos.transporte.gob.ar/dataset/recorridos-de-lineas-de-transporte-rmba-jn) (Nación) | OpenStreetMap |
 | Autopistas | OpenStreetMap (el GCBA no publica el trazado) | — |
 | Ciclovías | [Ciclovías](https://data.buenosaires.gob.ar/dataset/ciclovias) (GCBA) | OpenStreetMap |
 
@@ -42,7 +42,8 @@ desde el navegador (más lento, sobre todo colectivos).
 - Colectivos coloreados por jurisdicción, con filtro por número de línea
   (`60, 152`) y por jurisdicción (Ciudad / Nacional / Provincial).
 - Clic en cualquier recorrido para ver sus atributos.
-- Mapa base claro, oscuro u OpenStreetMap; adaptado a celulares.
+- Mapa base: Google Maps / Google Satélite (con clave, ver abajo),
+  OpenStreetMap, Esri Calles o Esri Satélite; adaptado a celulares.
 
 ## Publicar en GitHub Pages
 
@@ -50,13 +51,41 @@ El workflow `.github/workflows/deploy.yml` descarga los datos, compila y publica
 el sitio en cada push a `main` y todos los lunes. Activalo en
 **Settings → Pages → Source: GitHub Actions**.
 
+## Google Maps como mapa base
+
+Google sólo permite usar sus mapas con una clave propia (Map Tiles API). Sin
+clave, la app usa OpenStreetMap y Esri.
+
+1. En [Google Cloud Console](https://console.cloud.google.com/) creá un
+   proyecto y activá la facturación (Map Tiles API tiene un cupo mensual sin
+   cargo; revisá los precios vigentes).
+2. Habilitá **Map Tiles API** (APIs y servicios → Biblioteca).
+3. Creá una clave en APIs y servicios → Credenciales. **Restringila** a:
+   - Sitios web: `https://juan-code-collab.github.io/*` (y
+     `http://localhost:5173/*` si la usás en tu compu).
+   - API: sólo Map Tiles API.
+
+   La clave queda visible en la página publicada; la restricción evita que
+   otros sitios la usen.
+4. En GitHub: Settings → Secrets and variables → Actions → **New repository
+   secret**, nombre `GOOGLE_MAPS_API_KEY`, valor la clave.
+5. Volvé a correr el workflow (Actions → Publicar mapa → Run workflow).
+
+En tu compu: creá un archivo `.env.local` con
+`VITE_GOOGLE_MAPS_API_KEY=tu-clave` y corré `npm run dev`.
+
 ## Notas sobre los datos
 
-- La jurisdicción de cada colectivo se toma del campo del dataset cuando existe.
-  Si no, se infiere por número: las líneas de `LINEAS_JURISDICCION_CIUDAD`
-  (en `src/capas.js`) son de la Ciudad, el resto de 1–199 Nacionales y 200+
-  Provinciales. **Esa lista es aproximada: conviene verificarla** contra la
-  fuente oficial.
+- Colectivos: las líneas de jurisdicción de la Ciudad salen del dataset
+  [Colectivos: recorridos](https://data.buenosaires.gob.ar/dataset/colectivos-recorridos)
+  del GCBA; las nacionales y provinciales, del dataset
+  [Recorridos de Líneas de Transporte de RMBA](https://datos.transporte.gob.ar/dataset/recorridos-de-lineas-de-transporte-rmba-jn)
+  del Ministerio de Transporte, quedándose sólo con los recorridos que pasan
+  por CABA. El dataset nacional todavía lista como nacionales las líneas que
+  pasaron a la Ciudad; por eso `LINEAS_JURISDICCION_CIUDAD` (en
+  `src/capas.js`) tiene prioridad. Si la Ciudad suma o traspasa líneas, hay que
+  actualizar esa lista.
+- Los números de línea se muestran sin ceros adelante (`004` → `4`).
 - Las URLs de los datasets se resuelven por nombre a través de la API CKAN del
   portal, así que siguen funcionando aunque el GCBA cambie los archivos. Si
   cambia el nombre de un dataset, editá `ckan.dataset` en `src/capas.js`.

@@ -1,8 +1,9 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
-import { CAPAS, OVERPASS_API } from './capas.js';
-import { colorSubte, jurisdiccionDe, lineaDe, overpassAGeojson } from './geo.js';
+import { CAPAS, OVERPASS_APIS } from './capas.js';
+import { capasGoogle } from './google.js';
+import { colorSubte, jurisdiccionDe, lineaDe, normalizarLinea, overpassAGeojson, pasaPorCaba, soloLineas } from './geo.js';
 
 const DATOS = `${import.meta.env.BASE_URL}data/`;
 
@@ -17,23 +18,24 @@ const JURISDICCIONES = {
 
 const mapa = L.map('mapa', { preferCanvas: true }).setView([-34.6118, -58.4173], 12);
 
-const atribucionOsm = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services';
 const bases = {
-  Claro: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: `${atribucionOsm} © <a href="https://carto.com/attributions">CARTO</a>`,
-    maxZoom: 19,
-  }),
+  // Google Maps y Google Satélite se agregan arriba si hay clave configurada.
+  ...(await capasGoogle(mapa)),
   OpenStreetMap: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: atribucionOsm,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 19,
   }),
-  Oscuro: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: `${atribucionOsm} © <a href="https://carto.com/attributions">CARTO</a>`,
+  'Esri Calles': L.tileLayer(`${esri}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`, {
+    attribution: 'Tiles © Esri',
+    maxZoom: 19,
+  }),
+  'Esri Satélite': L.tileLayer(`${esri}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, {
+    attribution: 'Tiles © Esri — Maxar, Earthstar Geographics',
     maxZoom: 19,
   }),
 };
-const oscuro = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-(oscuro ? bases.Oscuro : bases.Claro).addTo(mapa);
+Object.values(bases)[0].addTo(mapa);
 L.control.layers(bases, null, { position: 'topright' }).addTo(mapa);
 L.control.scale({ imperial: false }).addTo(mapa);
 
@@ -70,22 +72,29 @@ async function cargar(capa, avisar) {
   try {
     const r = await fetch(`${DATOS}${capa.id}.geojson`);
     if (r.ok) {
-      const geojson = await r.json(); // falla si el servidor devolvió index.html
-      if (geojson.features) return geojson;
+      const geojson = soloLineas(await r.json()); // falla si el servidor devolvió index.html
+      if (geojson.features.length) return geojson;
     }
   } catch {
     // sin archivo local: seguimos con OpenStreetMap
   }
-  // 2) Respaldo en vivo: OpenStreetMap vía Overpass.
+  // 2) Respaldo en vivo: OpenStreetMap vía Overpass, probando cada servidor.
   if (!capa.overpass) throw new Error('sin datos locales');
   avisar('Consultando OpenStreetMap… (puede tardar)');
-  const r = await fetch(OVERPASS_API, {
-    method: 'POST',
-    body: new URLSearchParams({ data: capa.overpass }),
-  });
-  if (!r.ok) throw new Error(`Overpass respondió ${r.status}`);
-  fuentes.osmEnVivo = true;
-  return overpassAGeojson(await r.json());
+  let ultimoError;
+  for (const servidor of OVERPASS_APIS) {
+    try {
+      const r = await fetch(servidor, { method: 'POST', body: new URLSearchParams({ data: capa.overpass }) });
+      if (!r.ok) throw new Error(`Overpass respondió ${r.status}`);
+      fuentes.osmEnVivo = true;
+      const geojson = soloLineas(overpassAGeojson(await r.json()));
+      if (capa.soloCaba) geojson.features = geojson.features.filter(pasaPorCaba);
+      return geojson;
+    } catch (e) {
+      ultimoError = e;
+    }
+  }
+  throw ultimoError;
 }
 
 // ------------------------------------------------------------------- capas
@@ -98,8 +107,8 @@ function filtroColectivos() {
   const lineas = document
     .getElementById('filtro-linea')
     .value.split(/[\s,;]+/)
-    .map((s) => s.trim().toUpperCase())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(normalizarLinea);
   const jur = document.getElementById('filtro-jurisdiccion').value;
   return (feat) =>
     (!lineas.length || lineas.includes(lineaDe(feat.properties))) &&
