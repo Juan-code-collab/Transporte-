@@ -2,6 +2,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { CAPAS, OVERPASS_APIS } from './capas.js';
+import { capasGoogle } from './google.js';
 import { colorSubte, jurisdiccionDe, lineaDe, overpassAGeojson, soloLineas } from './geo.js';
 
 const DATOS = `${import.meta.env.BASE_URL}data/`;
@@ -17,23 +18,24 @@ const JURISDICCIONES = {
 
 const mapa = L.map('mapa', { preferCanvas: true }).setView([-34.6118, -58.4173], 12);
 
-const atribucionOsm = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services';
 const bases = {
-  Claro: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: `${atribucionOsm} © <a href="https://carto.com/attributions">CARTO</a>`,
-    maxZoom: 19,
-  }),
+  // Google Maps y Google Satélite se agregan arriba si hay clave configurada.
+  ...(await capasGoogle(mapa)),
   OpenStreetMap: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: atribucionOsm,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 19,
   }),
-  Oscuro: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: `${atribucionOsm} © <a href="https://carto.com/attributions">CARTO</a>`,
+  'Esri Calles': L.tileLayer(`${esri}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`, {
+    attribution: 'Tiles © Esri',
+    maxZoom: 19,
+  }),
+  'Esri Satélite': L.tileLayer(`${esri}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, {
+    attribution: 'Tiles © Esri — Maxar, Earthstar Geographics',
     maxZoom: 19,
   }),
 };
-const oscuro = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-(oscuro ? bases.Oscuro : bases.Claro).addTo(mapa);
+Object.values(bases)[0].addTo(mapa);
 L.control.layers(bases, null, { position: 'topright' }).addTo(mapa);
 L.control.scale({ imperial: false }).addTo(mapa);
 

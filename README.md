@@ -42,13 +42,37 @@ desde el navegador (más lento, sobre todo colectivos).
 - Colectivos coloreados por jurisdicción, con filtro por número de línea
   (`60, 152`) y por jurisdicción (Ciudad / Nacional / Provincial).
 - Clic en cualquier recorrido para ver sus atributos.
-- Mapa base claro, oscuro u OpenStreetMap; adaptado a celulares.
+- Mapa base: Google Maps / Google Satélite (con clave, ver abajo),
+  OpenStreetMap, Esri Calles o Esri Satélite; adaptado a celulares.
 
 ## Publicar en GitHub Pages
 
 El workflow `.github/workflows/deploy.yml` descarga los datos, compila y publica
 el sitio en cada push a `main` y todos los lunes. Activalo en
 **Settings → Pages → Source: GitHub Actions**.
+
+## Google Maps como mapa base
+
+Google sólo permite usar sus mapas con una clave propia (Map Tiles API). Sin
+clave, la app usa OpenStreetMap y Esri.
+
+1. En [Google Cloud Console](https://console.cloud.google.com/) creá un
+   proyecto y activá la facturación (Map Tiles API tiene un cupo mensual sin
+   cargo; revisá los precios vigentes).
+2. Habilitá **Map Tiles API** (APIs y servicios → Biblioteca).
+3. Creá una clave en APIs y servicios → Credenciales. **Restringila** a:
+   - Sitios web: `https://juan-code-collab.github.io/*` (y
+     `http://localhost:5173/*` si la usás en tu compu).
+   - API: sólo Map Tiles API.
+
+   La clave queda visible en la página publicada; la restricción evita que
+   otros sitios la usen.
+4. En GitHub: Settings → Secrets and variables → Actions → **New repository
+   secret**, nombre `GOOGLE_MAPS_API_KEY`, valor la clave.
+5. Volvé a correr el workflow (Actions → Publicar mapa → Run workflow).
+
+En tu compu: creá un archivo `.env.local` con
+`VITE_GOOGLE_MAPS_API_KEY=tu-clave` y corré `npm run dev`.
 
 ## Notas sobre los datos
 

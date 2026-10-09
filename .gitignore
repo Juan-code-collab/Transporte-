@@ -3,3 +3,4 @@ dist/
 # Los datos se descargan con `npm run datos` (pueden pesar decenas de MB).
 public/data/*.geojson
 public/data/manifest.json
+.env.local

@@ -33,6 +33,9 @@ jobs:
       - run: npm run datos
         continue-on-error: true
       - run: npm run build
+        env:
+          # Opcional: habilita Google Maps como mapa base (ver README).
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
