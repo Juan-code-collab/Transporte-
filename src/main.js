@@ -20,6 +20,35 @@ import {
 
 const DATOS = `${import.meta.env.BASE_URL}data/`;
 
+// ---------------------------------------------------------------- versión
+//
+// GitHub Pages deja que el navegador guarde la página hasta 10 minutos, así
+// que después de publicar se puede seguir viendo la versión anterior. Al
+// abrir, se compara con version.json (pedido sin caché) y, si hay una más
+// nueva, se recarga una vez.
+document.getElementById('version').textContent = `Versión: ${new Date(__VERSION__).toLocaleString('es-AR')}`;
+if (!import.meta.env.DEV) {
+  fetch(`${import.meta.env.BASE_URL}version.json`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then(({ version }) => {
+      let yaRecargada = null;
+      try {
+        yaRecargada = sessionStorage.getItem('recargada');
+      } catch {
+        // sin sessionStorage: igual se intenta una sola vez por carga
+      }
+      if (version && version !== __VERSION__ && yaRecargada !== version) {
+        try {
+          sessionStorage.setItem('recargada', version);
+        } catch {
+          return; // sin forma de evitar un bucle de recargas: no se recarga
+        }
+        location.reload();
+      }
+    })
+    .catch(() => {});
+}
+
 const JURISDICCIONES = {
   ciudad: { nombre: 'Ciudad', color: '#0097a7' },
   nacional: { nombre: 'Nacional (JN)', color: '#e67e22' },
