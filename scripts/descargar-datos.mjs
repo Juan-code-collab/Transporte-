@@ -36,7 +36,12 @@ function argumento(nombre) {
 async function pedirJson(url, opciones = {}, intentos = 3) {
   for (let i = 1; ; i++) {
     try {
-      const r = await fetch(url, { ...opciones, headers: { 'User-Agent': AGENTE, ...opciones.headers } });
+      // Límite de 2 minutos: un portal colgado no debe trabar toda la descarga.
+      const r = await fetch(url, {
+        ...opciones,
+        headers: { 'User-Agent': AGENTE, ...opciones.headers },
+        signal: AbortSignal.timeout(120000),
+      });
       if (!r.ok) throw new Error(`HTTP ${r.status} en ${url}`);
       const texto = await r.text();
       try {
