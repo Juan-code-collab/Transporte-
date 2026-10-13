@@ -39,9 +39,13 @@ desde el navegador (más lento, sobre todo colectivos).
 ## Funciones
 
 - Activar/desactivar cada capa.
-- Subtes con los colores oficiales de cada línea.
-- Colectivos coloreados por jurisdicción, con filtro por número de línea
-  (`60, 152`) y por jurisdicción (Ciudad / Nacional / Provincial).
+- **Filtro por comuna**: centra el mapa en la comuna, tapa lo que queda
+  afuera y muestra sólo los recorridos que pasan por ella.
+- Filtros por capa: líneas de subte y de tren (casillas), calle de ciclovía
+  (búsqueda con sugerencias) y colectivos por número de línea (`60, 152`) y
+  jurisdicción (Ciudad / Nacional / Provincial).
+- Subtes con los colores oficiales de cada línea; trenes y colectivos con un
+  color por línea o jurisdicción.
 - Clic en cualquier recorrido para ver sus atributos.
 - Mapa base: Google Maps / Google Satélite (con clave, ver abajo),
   OpenStreetMap, Esri Calles o Esri Satélite; adaptado a celulares.
@@ -101,6 +105,13 @@ lon/lat (WGS84) o en Gauss-Krüger Buenos Aires (GKBA), el sistema del GCBA.
   `src/capas.js`) tiene prioridad. Si la Ciudad suma o traspasa líneas, hay que
   actualizar esa lista.
 - Los números de línea se muestran sin ceros adelante (`004` → `4`).
+- Comunas: dataset [Comunas](https://data.buenosaires.gob.ar/dataset/comunas)
+  del GCBA. `npm run datos` anota en cada recorrido las comunas por las que
+  pasa (`_comunas`), usando una grilla de ~50 m: cerca de un límite entre
+  comunas puede haber un error de unos 25 m.
+- Trenes: el dataset nacional marca el Tren de la Costa como "Mitre" y un
+  ramal del Roca como "Sarmiento"; la app usa el código de línea (`IDLINEA`),
+  que es correcto.
 - Las URLs de los datasets se resuelven por nombre a través de la API CKAN del
   portal, así que siguen funcionando aunque el GCBA cambie los archivos. Si
   cambia el nombre de un dataset, editá `ckan.dataset` en `src/capas.js`.
