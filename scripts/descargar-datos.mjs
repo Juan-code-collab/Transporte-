@@ -170,7 +170,8 @@ async function descargar(capa, fuenteForzada) {
 
 const solo = argumento('solo')?.split(',');
 const fuenteForzada = argumento('fuente');
-const capas = CAPAS.filter((c) => !solo || solo.includes(c.id));
+// Las capas con `archivo` se cargan a mano: no se descargan.
+const capas = CAPAS.filter((c) => !c.archivo && (!solo || solo.includes(c.id)));
 
 await mkdir(DESTINO, { recursive: true });
 // Se conserva lo ya descargado de otras capas (útil con --solo).

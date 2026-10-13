@@ -46,7 +46,8 @@ function estiloDe(capa, props) {
   if (capa.id === 'subte') color = colorSubte(props) ?? color;
   if (capa.id === 'trenes' && /^#?[0-9a-f]{6}$/i.test(props.colour ?? '')) color = props.colour;
   if (capa.id === 'colectivos') color = JURISDICCIONES[jurisdiccionDe(props)]?.color ?? '#7f8c8d';
-  return { color, weight: capa.grosor, opacity: 0.85 };
+  if (/^#[0-9a-f]{6}$/i.test(props.color ?? '') && capa.archivo) color = props.color;
+  return { color, weight: capa.grosor, opacity: 0.85, dashArray: capa.discontinua ? '10 6' : null };
 }
 
 function escapar(texto) {
@@ -68,9 +69,9 @@ function popupDe(capa, props) {
 // ------------------------------------------------------------ carga de datos
 
 async function cargar(capa, avisar) {
-  // 1) Archivo descargado con `npm run datos`.
+  // 1) Archivo descargado con `npm run datos` (o cargado a mano, `archivo`).
   try {
-    const r = await fetch(`${DATOS}${capa.id}.geojson`);
+    const r = await fetch(capa.archivo ? `${import.meta.env.BASE_URL}${capa.archivo}` : `${DATOS}${capa.id}.geojson`);
     if (r.ok) {
       const geojson = soloLineas(await r.json()); // falla si el servidor devolvió index.html
       if (geojson.features.length) return geojson;
@@ -143,7 +144,7 @@ function dibujar(id) {
 
 // Las capas finas (ciclovías, colectivos) quedan por encima de las gruesas.
 function ordenarCapas() {
-  for (const id of ['autopistas', 'trenes', 'colectivos', 'subte', 'ciclovias']) {
+  for (const id of ['autopistas', 'trenes', 'colectivos', 'subte', 'ciclovias', 'proyectos']) {
     estado.get(id)?.capaLeaflet?.bringToFront();
   }
 }
@@ -165,6 +166,8 @@ async function activar(id, activa) {
     try {
       e.datos = await cargar(e.capa, e.mensaje);
       e.mensaje(`${e.datos.features.length} elementos`);
+      // Capas cargadas a mano (proyectos): leyenda con el nombre de cada traza.
+      if (e.capa.archivo) e.leyenda(e.datos.features.map((f) => f.properties ?? {}));
     } catch (err) {
       e.mensaje(`No se pudieron cargar los datos: ${err.message}`, true);
     } finally {
@@ -183,7 +186,8 @@ for (const capa of CAPAS) {
       <span class="muestra" style="background:${capa.color}"></span>
       ${escapar(capa.nombre)}
     </label>
-    <p class="estado"></p>`;
+    <p class="estado"></p>
+    <ul class="leyenda leyenda-capa"></ul>`;
   listaCapas.append(li);
 
   const p = li.querySelector('.estado');
@@ -193,6 +197,11 @@ for (const capa of CAPAS) {
     mensaje: (texto, error = false) => {
       p.textContent = texto;
       p.classList.toggle('error', error);
+    },
+    leyenda: (items) => {
+      li.querySelector('.leyenda-capa').innerHTML = items
+        .map((i) => `<li><span class="muestra" style="background:${escapar(i.color ?? capa.color)}"></span>${escapar(i.nombre ?? '')}</li>`)
+        .join('');
     },
   });
   li.querySelector('input').addEventListener('change', (ev) => activar(capa.id, ev.target.checked));
