@@ -138,6 +138,19 @@ ul {
   font-size: 13px;
 }
 
+.leyenda-capa {
+  margin: 4px 0 0 26px;
+}
+
+.leyenda-capa li {
+  align-items: flex-start;
+  font-size: 12px;
+}
+
+.leyenda-capa .muestra {
+  margin-top: 7px;
+}
+
 .resumen,
 #fuentes {
   font-size: 12px;

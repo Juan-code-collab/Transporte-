@@ -142,4 +142,15 @@ export const CAPAS = [
       ].join('\n'),
     ),
   },
+  {
+    id: 'proyectos',
+    nombre: 'Proyectos',
+    color: '#8e44ad',
+    grosor: 4,
+    visible: true,
+    discontinua: true,
+    // Trazas cargadas a mano desde shapefiles (npm run proyecto); no se
+    // descargan de ningún portal.
+    archivo: 'proyectos/proyectos.geojson',
+  },
 ];

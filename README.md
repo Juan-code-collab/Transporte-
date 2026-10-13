@@ -9,6 +9,7 @@ Mapa interactivo de la Ciudad de Buenos Aires con los recorridos de:
 | Colectivos (Ciudad, Nacional y Provincial) | [Recorridos de colectivos](https://data.buenosaires.gob.ar/dataset/colectivos-recorridos) (GCBA) + [Recorridos RMBA](https://datos.transporte.gob.ar/dataset/recorridos-de-lineas-de-transporte-rmba-jn) (Nación) | OpenStreetMap |
 | Autopistas | OpenStreetMap (el GCBA no publica el trazado) | — |
 | Ciclovías | [Ciclovías](https://data.buenosaires.gob.ar/dataset/ciclovias) (GCBA) | OpenStreetMap |
+| Proyectos (Línea F, T1a…) | Shapefiles cargados a mano (`public/proyectos/`) | — |
 
 Hecho con [Leaflet](https://leafletjs.com) y [Vite](https://vite.dev), sin backend: es un sitio estático.
 
@@ -73,6 +74,20 @@ clave, la app usa OpenStreetMap y Esri.
 
 En tu compu: creá un archivo `.env.local` con
 `VITE_GOOGLE_MAPS_API_KEY=tu-clave` y corré `npm run dev`.
+
+## Sumar proyectos desde un shapefile
+
+La capa **Proyectos** muestra trazas propias (línea punteada), por ejemplo la
+Línea F de subte o variantes de recorridos. Para sumar una desde un `.shp` de
+líneas:
+
+```bash
+npm run proyecto -- ruta/al/archivo.shp --nombre "Nombre del proyecto" --color "#8e44ad"
+```
+
+Se guarda en `public/proyectos/proyectos.geojson` (si ya hay uno con ese
+nombre, se reemplaza); después hay que hacer commit y push. Acepta archivos en
+lon/lat (WGS84) o en Gauss-Krüger Buenos Aires (GKBA), el sistema del GCBA.
 
 ## Notas sobre los datos
 
