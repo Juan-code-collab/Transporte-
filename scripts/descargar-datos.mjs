@@ -129,6 +129,27 @@ async function desdeOverpass(consulta, vueltas = 3) {
   throw ultimoError;
 }
 
+// Recorridos que los datasets oficiales no traen (p. ej. el Premetro) y se
+// suman desde OpenStreetMap. Si Overpass no responde, se conservan los de la
+// versión anterior del archivo (el deploy la trae antes de descargar).
+async function sumarExtra(capa, res) {
+  const { nombre, linea, filtro, overpass } = capa.sumar;
+  let extra = [];
+  try {
+    const todos = (await desdeOverpass(overpass)).geojson.features;
+    const elegidos = todos.filter((f) => filtro.test(`${f.properties.name ?? ''} ${f.properties.ref ?? ''}`));
+    extra = (elegidos.length ? elegidos : todos).map((f) => ({ ...f, properties: { ...f.properties, linea, _extra: nombre } }));
+  } catch (e) {
+    const previo = await readFile(`${DESTINO}${capa.id}.geojson`, 'utf8').then(JSON.parse, () => null);
+    extra = (previo?.features ?? []).filter((f) => f.properties?._extra === nombre);
+    console.warn(`  ✗ ${nombre}: ${e.message}${extra.length ? ' (se usa la versión anterior)' : ''}`);
+  }
+  if (!extra.length) return;
+  res.geojson.features.push(...extra);
+  res.fuente += `; ${nombre}: © colaboradores de OpenStreetMap (ODbL)`;
+  console.log(`  · ${extra.length} recorridos de ${nombre} (OpenStreetMap)`);
+}
+
 // Todas las fuentes CKAN de una capa, sumadas. Una línea que ya vino de una
 // fuente anterior no se vuelve a agregar.
 async function desdeCkanCombinado(fuentes, soloCaba) {
@@ -176,6 +197,7 @@ async function descargar(capa, fuenteForzada) {
       const res = await intento();
       if (capa.soloCaba) res.geojson.features = res.geojson.features.filter(pasaPorCaba);
       if (!res.geojson.features?.length) throw new Error('respuesta sin elementos');
+      if (capa.sumar && tipo === 'ckan') await sumarExtra(capa, res);
       return { ...res, tipo };
     } catch (e) {
       console.warn(`  ✗ ${capa.id} (${tipo}): ${e.message}`);
