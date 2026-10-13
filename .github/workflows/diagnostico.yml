@@ -1,0 +1,15 @@
+# Temporal: inspección de fuentes de datos. Se borra después.
+name: Diagnóstico de fuentes
+on:
+  push:
+    branches: ['claude/**']
+    paths: ['.diag/**', '.github/workflows/diagnostico.yml']
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node .diag/diag.mjs
