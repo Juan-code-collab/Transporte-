@@ -245,6 +245,13 @@ export function calleDe(props) {
   return ordenado.toLowerCase().replace(/(^|[\s.(/-])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
 }
 
+// Nombre de una autopista (OpenStreetMap): el nombre, o si no tiene, la
+// referencia (p. ej. "AU1").
+export function autopistaDe(props) {
+  const v = props?.name ?? props?.ref;
+  return v ? String(v).trim() : null;
+}
+
 export function coincideTexto(texto, buscado) {
   return sinAcentos(texto ?? '').includes(sinAcentos(buscado));
 }

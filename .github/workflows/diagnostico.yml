@@ -1,9 +1,8 @@
-# Temporal: inspección de fuentes de datos. Se borra después.
+# Temporal: prueba la descarga real desde la rama. Se borra después.
 name: Diagnóstico de fuentes
 on:
   push:
     branches: ['claude/**']
-    paths: ['.diag/**', '.github/workflows/diagnostico.yml']
 jobs:
   diag:
     runs-on: ubuntu-latest
@@ -12,4 +11,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node .diag/diag.mjs
+      - run: npm ci
+      - run: npm run datos -- --solo subte,autopistas
+        continue-on-error: true
+      - run: |
+          node --input-type=module -e '
+          import { readFileSync } from "fs";
+          import { lineaDe, autopistaDe } from "./src/geo.js";
+          const leer = (k) => JSON.parse(readFileSync(`public/data/${k}.geojson`));
+          const s = leer("subte").features;
+          console.log("subte líneas:", [...new Set(s.map((f) => lineaDe(f.properties)))].join(", "));
+          for (const f of s.filter((f) => f.properties._extra)) console.log("premetro:", JSON.stringify(f.properties).slice(0, 300));
+          const cuenta = {};
+          for (const f of leer("autopistas").features) { const k = autopistaDe(f.properties) ?? "(sin nombre)"; cuenta[k] = (cuenta[k] ?? 0) + 1; }
+          console.log("autopistas:"); for (const [k, n] of Object.entries(cuenta).sort((a, b) => b[1] - a[1])) console.log("  ", n, k);'

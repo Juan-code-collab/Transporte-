@@ -83,6 +83,14 @@ export const CAPAS = [
       { portal: PORTAL_NACION, dataset: RMBA, recurso: /subterr[aá]neos? - l[ií]neas/i },
       { portal: PORTAL_CIUDAD, dataset: 'subte-estaciones', recurso: /l[ií]nea/i },
     ],
+    // Los datasets oficiales traen sólo las líneas A–H: el Premetro se suma
+    // desde OpenStreetMap y se marca como línea "P".
+    sumar: {
+      nombre: 'Premetro',
+      linea: 'P',
+      filtro: /premetro/i,
+      overpass: consultaOverpass('relation["route"~"^(light_rail|tram)$"];'),
+    },
     overpass: consultaOverpass(
       [
         'relation["route"="subway"];',

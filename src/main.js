@@ -4,6 +4,7 @@ import './style.css';
 import { CAPAS, COLORES_SUBTE, COLORES_TREN, OVERPASS_APIS } from './capas.js';
 import { capasGoogle } from './google.js';
 import {
+  autopistaDe,
   calleDe,
   coincideTexto,
   colorSubte,
@@ -97,7 +98,8 @@ function escapar(texto) {
 }
 
 function tituloDe(capa, props) {
-  if (capa.id === 'subte') return `Subte — línea ${lineaDe(props) ?? '?'}`;
+  if (capa.id === 'subte') return lineaDe(props) === 'P' ? 'Premetro' : `Subte — línea ${lineaDe(props) ?? '?'}`;
+  if (capa.id === 'autopistas') return autopistaDe(props) ?? 'Autopista';
   if (capa.id === 'trenes') return `Tren ${lineaTren(props) ?? ''}`.trim();
   if (capa.id === 'ciclovias') return `Ciclovía — ${calleDe(props) ?? 'sin nombre'}`;
   if (capa.id === 'colectivos') return `Colectivo — línea ${lineaDe(props) ?? '?'}`;
@@ -159,8 +161,13 @@ const FILTROS = {
   subte: {
     tipo: 'lista',
     valor: (p) => lineaDe(p),
-    etiqueta: (v) => `Línea ${v}`,
+    etiqueta: (v) => (v === 'P' ? 'Premetro' : `Línea ${v}`),
     color: (v) => COLORES_SUBTE[v],
+  },
+  autopistas: {
+    tipo: 'lista',
+    valor: (p) => autopistaDe(p),
+    etiqueta: (v) => v,
   },
   trenes: {
     tipo: 'lista',
