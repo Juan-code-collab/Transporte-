@@ -3,7 +3,7 @@ import { CAPAS } from '../src/capas.js';
 const servidores = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 async function op(q) {
   for (let v = 0; v < 3; v++) for (const s of servidores) {
-    try { const r = await fetch(s, { method: 'POST', body: new URLSearchParams({ data: q }), signal: AbortSignal.timeout(120000) }); if (r.ok) return r.json(); console.log('  ', s, r.status); } catch (e) { console.log('  ', s, e.message); }
+    try { const r = await fetch(s, { method: 'POST', headers: { 'User-Agent': 'transporte-caba/0.1 (mapa de transporte de Buenos Aires)', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ data: q }), signal: AbortSignal.timeout(120000) }); if (r.ok) return r.json(); console.log('  ', s, r.status); } catch (e) { console.log('  ', s, e.message); }
     await new Promise((ok) => setTimeout(ok, 10000));
   }
   throw new Error('overpass no respondió');
