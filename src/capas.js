@@ -163,15 +163,24 @@ export const CAPAS = [
       ].join('\n'),
     ),
   },
+  // Trazas cargadas a mano desde shapefiles (npm run proyecto); no se
+  // descargan de ningún portal. Punteadas porque son proyectos.
   {
-    id: 'proyectos',
-    nombre: 'Proyectos',
+    id: 'linea-f',
+    nombre: 'Línea F (subte, proyecto)',
     color: '#8e44ad',
+    grosor: 5,
+    visible: true,
+    discontinua: true,
+    archivo: 'proyectos/linea-f.geojson',
+  },
+  {
+    id: 'trambus',
+    nombre: 'Trambus',
+    color: '#d35400',
     grosor: 4,
     visible: true,
     discontinua: true,
-    // Trazas cargadas a mano desde shapefiles (npm run proyecto); no se
-    // descargan de ningún portal.
-    archivo: 'proyectos/proyectos.geojson',
+    archivo: 'proyectos/trambus.geojson',
   },
 ];
