@@ -167,7 +167,8 @@ const FILTROS = {
   autopistas: {
     tipo: 'lista',
     valor: (p) => autopistaDe(p),
-    etiqueta: (v) => v,
+    // "Autopista Perito Moreno" → "Perito Moreno" (el nombre completo va en el popup).
+    etiqueta: (v) => v.replace(/^Autopista\s+/i, ''),
   },
   trenes: {
     tipo: 'lista',

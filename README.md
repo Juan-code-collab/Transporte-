@@ -41,7 +41,8 @@ desde el navegador (más lento, sobre todo colectivos).
 - Activar/desactivar cada capa.
 - **Filtro por comuna**: centra el mapa en la comuna, tapa lo que queda
   afuera y muestra sólo los recorridos que pasan por ella.
-- Filtros por capa: líneas de subte y de tren (casillas), calle de ciclovía
+- Filtros por capa: líneas de subte (incluido el Premetro), de tren y
+  autopistas (casillas), calle de ciclovía
   (búsqueda con sugerencias) y colectivos por número de línea (`60, 152`) y
   jurisdicción (Ciudad / Nacional / Provincial).
 - Subtes con los colores oficiales de cada línea; trenes y colectivos con un
@@ -105,6 +106,8 @@ Gauss-Krüger Buenos Aires (GKBA), el sistema del GCBA.
   `src/capas.js`) tiene prioridad. Si la Ciudad suma o traspasa líneas, hay que
   actualizar esa lista.
 - Los números de línea se muestran sin ceros adelante (`004` → `4`).
+- Premetro: los datasets oficiales de subte no lo incluyen; se suma desde
+  OpenStreetMap (con su color oficial) dentro de la capa de subte.
 - Comunas: dataset [Comunas](https://data.buenosaires.gob.ar/dataset/comunas)
   del GCBA. `npm run datos` anota en cada recorrido las comunas por las que
   pasa (`_comunas`), usando una grilla de ~50 m: cerca de un límite entre
