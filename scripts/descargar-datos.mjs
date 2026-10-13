@@ -9,8 +9,19 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { CAPAS, OVERPASS_APIS } from '../src/capas.js';
-import { esWgs84, lineaDe, overpassAGeojson, pasaPorCaba, redondear, simplificar, soloLineas } from '../src/geo.js';
+import { CAPAS, COMUNAS, OVERPASS_APIS } from '../src/capas.js';
+import {
+  arreglarPropiedades,
+  comunasDe,
+  esWgs84,
+  lineaDe,
+  overpassAGeojson,
+  pasaPorCaba,
+  prepararComunas,
+  redondear,
+  simplificar,
+  soloLineas,
+} from '../src/geo.js';
 
 const DESTINO = fileURLToPath(new URL('../public/data/', import.meta.url));
 const AGENTE = 'transporte-caba/0.1 (mapa de transporte de Buenos Aires)';
@@ -46,7 +57,7 @@ async function desdeCkan(fuente) {
   } catch (e) {
     if (!fuente.respaldo) throw e;
     console.log(`  · ${e.message}; se usa el archivo directo`);
-    const geojson = soloLineas(await pedirJson(fuente.respaldo));
+    const geojson = soloLineas(arreglarPropiedades(await pedirJson(fuente.respaldo)));
     if (!geojson.features.length || !esWgs84(geojson)) throw e;
     return { geojson, fuente: `Gobierno de la Ciudad de Buenos Aires — ${fuente.dataset}`, url: fuente.respaldo };
   }
@@ -63,7 +74,7 @@ async function desdeCkanApi({ portal, dataset, recurso }) {
   // Un dataset puede tener varios GeoJSON (p. ej. estaciones y líneas): se usa
   // el primero que traiga recorridos.
   for (const r of candidatos) {
-    const geojson = soloLineas(await pedirJson(r.url));
+    const geojson = soloLineas(arreglarPropiedades(await pedirJson(r.url)));
     if (!geojson.features?.length) {
       console.log(`  · ${r.name}: sin recorridos (sólo puntos), se descarta`);
       continue;
@@ -178,6 +189,34 @@ await mkdir(DESTINO, { recursive: true });
 const manifiesto = await readFile(`${DESTINO}manifest.json`, 'utf8').then(JSON.parse, () => ({}));
 let fallidas = 0;
 
+// Comunas: se guardan para el filtro y se usan para anotar en cada recorrido
+// por qué comunas pasa (propiedad `_comunas`), así el navegador no lo calcula.
+let comunas = [];
+console.log('→ Comunas');
+try {
+  const geojson = await pedirComunas();
+  comunas = prepararComunas(geojson);
+  await writeFile(`${DESTINO}comunas.geojson`, JSON.stringify(redondear(geojson)));
+  manifiesto.comunas = { fuente: 'Gobierno de la Ciudad de Buenos Aires — Comunas', descargado: new Date().toISOString() };
+  console.log(`  ✓ ${comunas.length} comunas`);
+} catch (e) {
+  // Si ya había un archivo (p. ej. del deploy anterior), se usa ese.
+  const previo = await readFile(`${DESTINO}comunas.geojson`, 'utf8').then(JSON.parse, () => null);
+  if (previo) comunas = prepararComunas(previo);
+  console.warn(`  ✗ comunas: ${e.message}${previo ? ' (se usa la versión anterior)' : ''}`);
+}
+
+async function pedirComunas() {
+  try {
+    const { result } = await pedirJson(`${COMUNAS.portal}/api/3/action/package_show?id=${COMUNAS.dataset}`);
+    const r = result.resources.find((x) => /\.geojson$/i.test(x.url) && COMUNAS.recurso.test(x.name));
+    if (r) return await pedirJson(r.url);
+  } catch {
+    // se prueba el archivo directo
+  }
+  return pedirJson(COMUNAS.respaldo);
+}
+
 for (const capa of capas) {
   console.log(`→ ${capa.nombre}`);
   const res = await descargar(capa, fuenteForzada);
@@ -185,6 +224,7 @@ for (const capa of capas) {
     fallidas++;
     continue;
   }
+  if (comunas.length) for (const f of res.geojson.features) f.properties = { ...f.properties, _comunas: comunasDe(f, comunas) };
   const texto = JSON.stringify(redondear(simplificar(res.geojson)));
   await writeFile(`${DESTINO}${capa.id}.geojson`, texto);
   manifiesto[capa.id] = {

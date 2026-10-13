@@ -1,9 +1,22 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
-import { CAPAS, OVERPASS_APIS } from './capas.js';
+import { CAPAS, COLORES_SUBTE, COLORES_TREN, OVERPASS_APIS } from './capas.js';
 import { capasGoogle } from './google.js';
-import { colorSubte, jurisdiccionDe, lineaDe, normalizarLinea, overpassAGeojson, pasaPorCaba, soloLineas } from './geo.js';
+import {
+  calleDe,
+  coincideTexto,
+  colorSubte,
+  comunasDe,
+  jurisdiccionDe,
+  lineaDe,
+  lineaTren,
+  normalizarLinea,
+  overpassAGeojson,
+  pasaPorCaba,
+  prepararComunas,
+  soloLineas,
+} from './geo.js';
 
 const DATOS = `${import.meta.env.BASE_URL}data/`;
 
@@ -44,7 +57,7 @@ L.control.scale({ imperial: false }).addTo(mapa);
 function estiloDe(capa, props) {
   let color = capa.color;
   if (capa.id === 'subte') color = colorSubte(props) ?? color;
-  if (capa.id === 'trenes' && /^#?[0-9a-f]{6}$/i.test(props.colour ?? '')) color = props.colour;
+  if (capa.id === 'trenes') color = COLORES_TREN[lineaTren(props)] ?? color;
   if (capa.id === 'colectivos') color = JURISDICCIONES[jurisdiccionDe(props)]?.color ?? '#7f8c8d';
   if (/^#[0-9a-f]{6}$/i.test(props.color ?? '') && capa.archivo) color = props.color;
   return { color, weight: capa.grosor, opacity: 0.85, dashArray: capa.discontinua ? '10 6' : null };
@@ -54,16 +67,24 @@ function escapar(texto) {
   return String(texto).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
+function tituloDe(capa, props) {
+  if (capa.id === 'subte') return `Subte — línea ${lineaDe(props) ?? '?'}`;
+  if (capa.id === 'trenes') return `Tren ${lineaTren(props) ?? ''}`.trim();
+  if (capa.id === 'ciclovias') return `Ciclovía — ${calleDe(props) ?? 'sin nombre'}`;
+  if (capa.id === 'colectivos') return `Colectivo — línea ${lineaDe(props) ?? '?'}`;
+  return props.name ?? props.nombre ?? props.NOMBRE ?? capa.nombre;
+}
+
 function popupDe(capa, props) {
-  const linea = lineaDe(props);
-  const titulo = props.name ?? props.nombre ?? props.NOMBRE ?? (linea ? `${capa.nombre} — línea ${linea}` : capa.nombre);
+  const titulo = tituloDe(capa, props);
   const filas = Object.entries(props)
-    .filter(([, v]) => v !== null && v !== '' && typeof v !== 'object')
+    .filter(([k, v]) => !k.startsWith('_') && v !== null && v !== '' && typeof v !== 'object')
     .slice(0, 14)
     .map(([k, v]) => `<tr><td>${escapar(k)}</td><td>${escapar(v)}</td></tr>`)
     .join('');
   const jur = capa.id === 'colectivos' ? JURISDICCIONES[jurisdiccionDe(props)]?.nombre : null;
-  return `<div class="popup"><h3>${escapar(titulo)}</h3>${jur ? `<p>Jurisdicción: ${jur}</p>` : ''}<table>${filas}</table></div>`;
+  const com = props._comunas?.length ? `<p>Comunas: ${props._comunas.join(', ')}</p>` : '';
+  return `<div class="popup"><h3>${escapar(titulo)}</h3>${jur ? `<p>Jurisdicción: ${jur}</p>` : ''}${com}<table>${filas}</table></div>`;
 }
 
 // ------------------------------------------------------------ carga de datos
@@ -98,23 +119,134 @@ async function cargar(capa, avisar) {
   throw ultimoError;
 }
 
-// ------------------------------------------------------------------- capas
+// ----------------------------------------------------------------- filtros
+//
+// Cada capa puede tener un filtro propio:
+//   - 'lista': casillas con los valores presentes en los datos (líneas).
+//   - 'texto': búsqueda libre, con sugerencias (números de línea, calles).
+// Sin nada elegido, se ve todo.
+
+const FILTROS = {
+  subte: {
+    tipo: 'lista',
+    valor: (p) => lineaDe(p),
+    etiqueta: (v) => `Línea ${v}`,
+    color: (v) => COLORES_SUBTE[v],
+  },
+  trenes: {
+    tipo: 'lista',
+    valor: (p) => lineaTren(p),
+    etiqueta: (v) => v,
+    color: (v) => COLORES_TREN[v],
+  },
+  colectivos: {
+    tipo: 'texto',
+    titulo: 'Líneas',
+    placeholder: 'Ej.: 60, 152',
+    valor: (p) => lineaDe(p),
+    // Varias líneas separadas por coma; coincidencia exacta ("4" no trae la 41).
+    coincide: (valor, texto) => {
+      const buscadas = texto.split(/[\s,;]+/).filter(Boolean).map(normalizarLinea);
+      return !buscadas.length || buscadas.includes(valor);
+    },
+    extra: 'jurisdiccion',
+  },
+  ciclovias: {
+    tipo: 'texto',
+    titulo: 'Calle',
+    placeholder: 'Ej.: Corrientes',
+    valor: (p) => calleDe(p),
+    coincide: (valor, texto) => !texto.trim() || coincideTexto(valor, texto.trim()),
+  },
+};
 
 const listaCapas = document.getElementById('capas');
-const estado = new Map(); // id → { capa, datos, capaLeaflet, cargando }
+const estado = new Map(); // id → { capa, datos, capaLeaflet, cargando, ... }
 const fuentes = { manifiesto: {}, osmEnVivo: false };
 
-function filtroColectivos() {
-  const lineas = document
-    .getElementById('filtro-linea')
-    .value.split(/[\s,;]+/)
-    .filter(Boolean)
-    .map(normalizarLinea);
-  const jur = document.getElementById('filtro-jurisdiccion').value;
-  return (feat) =>
-    (!lineas.length || lineas.includes(lineaDe(feat.properties))) &&
-    (!jur || jurisdiccionDe(feat.properties) === jur);
+// Filtro de la capa (líneas, calle, jurisdicción) según lo elegido en el panel.
+function filtroDeCapa(e) {
+  const def = FILTROS[e.capa.id];
+  if (!def || !e.filtro) return () => true;
+  const caja = e.filtro;
+  let pasa = () => true;
+  if (def.tipo === 'lista') {
+    const elegidos = [...caja.querySelectorAll('input[type=checkbox]:checked')].map((i) => i.value);
+    if (elegidos.length) pasa = (f) => elegidos.includes(def.valor(f.properties ?? {}));
+  } else {
+    const texto = caja.querySelector('input[type=search]').value;
+    pasa = (f) => def.coincide(def.valor(f.properties ?? {}), texto);
+  }
+  const jur = caja.querySelector('select')?.value;
+  if (jur) {
+    const antes = pasa;
+    pasa = (f) => antes(f) && jurisdiccionDe(f.properties) === jur;
+  }
+  return pasa;
 }
+
+// ------------------------------------------------------------------ comunas
+
+let comunas = [];
+let comunaElegida = null;
+let mascara = null;
+
+function comunasDeFeature(f) {
+  if (!f.properties) f.properties = {};
+  // Los archivos descargados ya traen `_comunas`; si no (OpenStreetMap en
+  // vivo, proyectos), se calcula una vez y se guarda.
+  if (!Array.isArray(f.properties._comunas) && comunas.length) f.properties._comunas = comunasDe(f, comunas);
+  return f.properties._comunas ?? [];
+}
+
+function filtroComuna() {
+  if (!comunaElegida) return () => true;
+  return (f) => comunasDeFeature(f).includes(comunaElegida.numero);
+}
+
+function elegirComuna(numero) {
+  comunaElegida = comunas.find((c) => c.numero === Number(numero)) ?? null;
+  if (mascara) mapa.removeLayer(mascara);
+  mascara = null;
+  document.getElementById('barrios-comuna').textContent = comunaElegida ? `Barrios: ${comunaElegida.barrios}` : '';
+  if (comunaElegida) {
+    // Todo lo de afuera de la comuna queda tapado; adentro se ve el mapa.
+    const mundo = [[-90, -180], [-90, 180], [90, 180], [90, -180]];
+    const huecos = comunaElegida.poligonos.map((anillos) => anillos[0].map(([x, y]) => [y, x]));
+    // Va en un panel propio, por encima de los recorridos: así los tramos que
+    // salen de la comuna también quedan tapados.
+    const opciones = { pane: 'mascara', renderer: rendererMascara, interactive: false };
+    mascara = L.layerGroup([
+      L.polygon([mundo, ...huecos], { ...opciones, stroke: false, fillColor: oscuro ? '#111418' : '#ffffff', fillOpacity: 0.9 }),
+      L.geoJSON(comunaElegida.feature, { ...opciones, style: { color: '#233aa8', weight: 2.5, fill: false } }),
+    ]).addTo(mapa);
+    mapa.fitBounds(L.geoJSON(comunaElegida.feature).getBounds(), { padding: [20, 20] });
+  } else {
+    mapa.setView([-34.6118, -58.4173], 12);
+  }
+  for (const id of estado.keys()) dibujar(id);
+}
+
+const oscuro = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+mapa.createPane('mascara').style.zIndex = 450; // entre los recorridos (400) y los popups
+mapa.getPane('mascara').style.pointerEvents = 'none';
+const rendererMascara = L.svg({ pane: 'mascara' });
+
+async function cargarComunas() {
+  const selector = document.getElementById('filtro-comuna');
+  try {
+    const r = await fetch(`${DATOS}comunas.geojson`);
+    comunas = prepararComunas(await r.json());
+  } catch {
+    selector.disabled = true;
+    selector.options[0].textContent = 'Comunas no disponibles';
+    return;
+  }
+  for (const c of comunas) selector.add(new Option(`Comuna ${c.numero}`, c.numero));
+  selector.addEventListener('change', () => elegirComuna(selector.value));
+}
+
+// ---------------------------------------------------------------- dibujado
 
 function dibujar(id) {
   const e = estado.get(id);
@@ -122,11 +254,12 @@ function dibujar(id) {
   e.capaLeaflet = null;
   if (!e.activa || !e.datos) return;
 
-  const filtro = id === 'colectivos' ? filtroColectivos() : () => true;
+  const filtro = filtroDeCapa(e);
+  const enComuna = filtroComuna();
   let visibles = 0;
   e.capaLeaflet = L.geoJSON(e.datos, {
     filter: (f) => {
-      const ok = f.geometry && /LineString/.test(f.geometry.type) && filtro(f);
+      const ok = f.geometry && /LineString/.test(f.geometry.type) && filtro(f) && enComuna(f);
       if (ok) visibles++;
       return ok;
     },
@@ -138,7 +271,8 @@ function dibujar(id) {
     },
   }).addTo(mapa);
 
-  if (id === 'colectivos') actualizarResumenColectivos(visibles);
+  const total = e.datos.features.length;
+  e.mensaje(visibles === total ? `${total} elementos` : `${visibles} de ${total} elementos visibles`);
   ordenarCapas();
 }
 
@@ -149,23 +283,65 @@ function ordenarCapas() {
   }
 }
 
-function actualizarResumenColectivos(visibles) {
-  const e = estado.get('colectivos');
-  const lineas = new Set(e.datos.features.map((f) => lineaDe(f.properties)).filter(Boolean));
-  document.getElementById('resumen-colectivos').textContent =
-    `${visibles} de ${e.datos.features.length} recorridos visibles · ${lineas.size} líneas en total`;
+// Arma el filtro de la capa con los valores que trae el dato.
+function armarFiltro(e) {
+  const def = FILTROS[e.capa.id];
+  if (!def) return;
+  const caja = e.li.querySelector('.filtro');
+  const valores = [...new Set(e.datos.features.map((f) => def.valor(f.properties ?? {})).filter(Boolean))].sort((a, b) =>
+    String(a).localeCompare(String(b), 'es', { numeric: true }),
+  );
+  if (def.tipo === 'lista') {
+    caja.innerHTML = `<div class="chips">${valores
+      .map(
+        (v) => `<label class="chip"><input type="checkbox" value="${escapar(v)}" />
+          <span class="muestra" style="background:${escapar(def.color?.(v) ?? e.capa.color)}"></span>${escapar(def.etiqueta(v))}</label>`,
+      )
+      .join('')}</div>`;
+  } else {
+    const idLista = `sugerencias-${e.capa.id}`;
+    caja.innerHTML = `
+      <label>${escapar(def.titulo)}
+        <input type="search" list="${idLista}" placeholder="${escapar(def.placeholder)}" autocomplete="off" />
+      </label>
+      <datalist id="${idLista}">${valores.map((v) => `<option value="${escapar(v)}"></option>`).join('')}</datalist>`;
+  }
+  if (def.extra === 'jurisdiccion') {
+    caja.insertAdjacentHTML(
+      'beforeend',
+      `<label>Jurisdicción
+        <select>
+          <option value="">Todas</option>
+          <option value="ciudad">Ciudad</option>
+          <option value="nacional">Nacional (JN)</option>
+          <option value="provincial">Provincial</option>
+        </select>
+      </label>
+      <ul class="leyenda">${Object.values(JURISDICCIONES)
+        .slice(0, 3)
+        .map((j) => `<li><span class="muestra" style="background:${j.color}"></span>${j.nombre}</li>`)
+        .join('')}</ul>`,
+    );
+  }
+  let espera;
+  caja.addEventListener('input', () => {
+    clearTimeout(espera);
+    espera = setTimeout(() => dibujar(e.capa.id), 250);
+  });
+  caja.addEventListener('change', () => dibujar(e.capa.id));
+  e.filtro = caja;
 }
 
 async function activar(id, activa) {
   const e = estado.get(id);
   e.activa = activa;
-  if (id === 'colectivos') document.getElementById('filtro-colectivos').hidden = !activa;
+  const caja = e.li.querySelector('.filtro');
   if (activa && !e.datos && !e.cargando) {
     e.cargando = true;
     e.mensaje('Cargando…');
     try {
       e.datos = await cargar(e.capa, e.mensaje);
-      e.mensaje(`${e.datos.features.length} elementos`);
+      armarFiltro(e);
       // Capas cargadas a mano (proyectos): leyenda con el nombre de cada traza.
       if (e.capa.archivo) e.leyenda(e.datos.features.map((f) => f.properties ?? {}));
     } catch (err) {
@@ -175,6 +351,7 @@ async function activar(id, activa) {
       mostrarFuentes();
     }
   }
+  if (caja) caja.hidden = !activa || !e.filtro;
   dibujar(id);
 }
 
@@ -187,12 +364,14 @@ for (const capa of CAPAS) {
       ${escapar(capa.nombre)}
     </label>
     <p class="estado"></p>
-    <ul class="leyenda leyenda-capa"></ul>`;
+    <ul class="leyenda leyenda-capa"></ul>
+    <div class="filtro" hidden></div>`;
   listaCapas.append(li);
 
   const p = li.querySelector('.estado');
   estado.set(capa.id, {
     capa,
+    li,
     activa: false,
     mensaje: (texto, error = false) => {
       p.textContent = texto;
@@ -206,20 +385,6 @@ for (const capa of CAPAS) {
   });
   li.querySelector('input').addEventListener('change', (ev) => activar(capa.id, ev.target.checked));
 }
-
-// --------------------------------------------------------- filtros y leyenda
-
-document.getElementById('leyenda-colectivos').innerHTML = Object.values(JURISDICCIONES)
-  .slice(0, 3)
-  .map((j) => `<li><span class="muestra" style="background:${j.color}"></span>${j.nombre}</li>`)
-  .join('');
-
-let espera;
-document.getElementById('filtro-linea').addEventListener('input', () => {
-  clearTimeout(espera);
-  espera = setTimeout(() => dibujar('colectivos'), 250);
-});
-document.getElementById('filtro-jurisdiccion').addEventListener('change', () => dibujar('colectivos'));
 
 const panel = document.getElementById('panel');
 const botonPlegar = document.getElementById('plegar');
@@ -249,5 +414,6 @@ try {
   // sin manifiesto: aún no se corrió `npm run datos`
 }
 mostrarFuentes();
+await cargarComunas();
 
 for (const capa of CAPAS) if (capa.visible) activar(capa.id, true);

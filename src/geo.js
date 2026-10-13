@@ -49,7 +49,7 @@ export const CONTORNO_CABA = [
   [-58.5310, -34.6150], [-58.5050, -34.5800], [-58.4880, -34.5500],
 ];
 
-function dentro([x, y], poligono) {
+export function dentro([x, y], poligono) {
   let adentro = false;
   for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
     const [xi, yi] = poligono[i];
@@ -193,4 +193,114 @@ export function colorSubte(props) {
   if (c && /^#?[0-9a-f]{6}$/i.test(c)) return c.startsWith('#') ? c : `#${c}`;
   const linea = lineaDe(props);
   return COLORES_SUBTE[linea] ?? null;
+}
+
+// Algunos archivos vienen con los acentos rotos ("San MartÃ­n"): UTF-8 leído
+// como Latin-1. Se recompone; si no se puede, queda igual.
+export function arreglarTexto(texto) {
+  if (typeof texto !== 'string' || !/[ÃÂ]/.test(texto)) return texto;
+  try {
+    return decodeURIComponent(escape(texto));
+  } catch {
+    return texto;
+  }
+}
+
+export function arreglarPropiedades(geojson) {
+  for (const f of geojson.features ?? []) {
+    if (!f.properties) continue;
+    f.properties = Object.fromEntries(Object.entries(f.properties).map(([k, v]) => [arreglarTexto(k), arreglarTexto(v)]));
+  }
+  return geojson;
+}
+
+const sinAcentos = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// Líneas de tren del AMBA. Se buscan en el código de línea, la descripción y
+// el nombre: el dataset nacional marca el Tren de la Costa como "Mitre" y un
+// ramal del Roca como "Sarmiento", pero el código (IDLINEA) es correcto.
+export const LINEAS_TREN = ['Belgrano Norte', 'Belgrano Sur', 'Mitre', 'Roca', 'San Martín', 'Sarmiento', 'Tren de la Costa', 'Urquiza'];
+
+export function lineaTren(props) {
+  const campos = ['IDLINEA', 'Descrip', 'Linea', 'linea_2', 'linea', 'name', 'ref'];
+  // Primero los nombres más largos, para que "Belgrano Sur" no quede como "Mitre".
+  const nombres = [...LINEAS_TREN].sort((a, b) => b.length - a.length);
+  for (const campo of campos) {
+    const v = props?.[campo];
+    if (!v) continue;
+    const t = sinAcentos(arreglarTexto(v));
+    const encontrada = nombres.find((n) => t.includes(sinAcentos(n)));
+    if (encontrada) return encontrada;
+  }
+  return null;
+}
+
+// "PERON, JUAN DOMINGO, TTE. GENERAL" → "Tte. General Juan Domingo Peron".
+export function calleDe(props) {
+  const v = props?.nombre ?? props?.NOMBRE ?? props?.name;
+  if (!v) return null;
+  const partes = String(v).split(/\s*,\s*/).filter(Boolean);
+  const ordenado = [...partes.slice(1).reverse(), partes[0]].join(' ');
+  return ordenado.toLowerCase().replace(/(^|[\s.(/-])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
+}
+
+export function coincideTexto(texto, buscado) {
+  return sinAcentos(texto ?? '').includes(sinAcentos(buscado));
+}
+
+// ------------------------------------------------------------------ comunas
+
+// Prepara los polígonos de comunas para consultas rápidas.
+export function prepararComunas(geojson) {
+  return (geojson.features ?? [])
+    .map((f) => {
+      const g = f.geometry;
+      const poligonos = g?.type === 'Polygon' ? [g.coordinates] : g?.type === 'MultiPolygon' ? g.coordinates : [];
+      const puntos = poligonos.flat(2);
+      const xs = puntos.map((p) => p[0]);
+      const ys = puntos.map((p) => p[1]);
+      return {
+        numero: Number(f.properties?.comuna ?? f.properties?.COMUNA),
+        barrios: f.properties?.barrios ?? f.properties?.BARRIOS ?? '',
+        poligonos,
+        caja: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+        feature: f,
+      };
+    })
+    .filter((c) => c.numero && c.poligonos.length)
+    .sort((a, b) => a.numero - b.numero);
+}
+
+function enComuna([x, y], comuna) {
+  const [x0, y0, x1, y1] = comuna.caja;
+  if (x < x0 || x > x1 || y < y0 || y > y1) return false;
+  // Par/impar sobre todos los anillos de cada polígono (respeta huecos).
+  return comuna.poligonos.some((anillos) => anillos.reduce((adentro, anillo) => (dentro([x, y], anillo) ? !adentro : adentro), false));
+}
+
+// Números de las comunas por las que pasa un recorrido. Además de los
+// vértices, prueba puntos intermedios de cada tramo para no perder segmentos
+// largos que cruzan una comuna sin tener un vértice adentro.
+export function comunasDe(feature, comunas) {
+  const tramos = [];
+  const juntar = (a) => (typeof a[0][0] === 'number' ? tramos.push(a) : a.forEach(juntar));
+  const c = feature.geometry?.coordinates;
+  if (!c?.length) return [];
+  juntar(feature.geometry.type === 'LineString' ? [c] : c);
+  const resultado = new Set();
+  for (const tramo of tramos) {
+    for (let i = 0; i < tramo.length; i++) {
+      const pts = [tramo[i]];
+      const sig = tramo[i + 1];
+      if (sig) {
+        const pasos = Math.min(20, Math.ceil(Math.hypot(sig[0] - tramo[i][0], sig[1] - tramo[i][1]) / 0.002));
+        for (let k = 1; k < pasos; k++) {
+          pts.push([tramo[i][0] + ((sig[0] - tramo[i][0]) * k) / pasos, tramo[i][1] + ((sig[1] - tramo[i][1]) * k) / pasos]);
+        }
+      }
+      for (const p of pts) for (const comuna of comunas) if (!resultado.has(comuna.numero) && enComuna(p, comuna)) resultado.add(comuna.numero);
+    }
+    if (resultado.size === comunas.length) break;
+  }
+  return [...resultado].sort((a, b) => a - b);
 }
