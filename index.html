@@ -14,27 +14,16 @@
       </header>
       <div id="contenido">
         <section>
-          <h2>Capas</h2>
-          <ul id="capas"></ul>
+          <h2>Comuna</h2>
+          <select id="filtro-comuna" aria-label="Filtrar por comuna">
+            <option value="">Toda la Ciudad</option>
+          </select>
+          <p class="resumen" id="barrios-comuna"></p>
         </section>
 
-        <section id="filtro-colectivos" hidden>
-          <h2>Colectivos</h2>
-          <label>
-            Líneas
-            <input id="filtro-linea" type="search" inputmode="numeric" placeholder="Ej.: 60, 152" autocomplete="off" />
-          </label>
-          <label>
-            Jurisdicción
-            <select id="filtro-jurisdiccion">
-              <option value="">Todas</option>
-              <option value="ciudad">Ciudad</option>
-              <option value="nacional">Nacional (JN)</option>
-              <option value="provincial">Provincial</option>
-            </select>
-          </label>
-          <ul class="leyenda" id="leyenda-colectivos"></ul>
-          <p class="resumen" id="resumen-colectivos"></p>
+        <section>
+          <h2>Capas</h2>
+          <ul id="capas"></ul>
         </section>
 
         <footer id="fuentes"></footer>

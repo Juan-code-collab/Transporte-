@@ -112,14 +112,22 @@ ul {
   color: #c0392b;
 }
 
-#filtro-colectivos label {
+.filtro {
+  margin: 8px 0 4px 26px;
+  padding: 10px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+
+#capas .filtro label {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   font-size: 13px;
 }
 
-#filtro-colectivos input,
-#filtro-colectivos select {
+.filtro input[type='search'],
+.filtro select,
+#filtro-comuna {
   display: block;
   width: 100%;
   margin-top: 4px;
@@ -129,6 +137,33 @@ ul {
   border-radius: 6px;
   background: var(--fondo);
   color: inherit;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#capas .filtro .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 3px 8px;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip input {
+  margin: 0;
+}
+
+.chip:has(input:checked) {
+  border-color: var(--acento);
+  background: color-mix(in srgb, var(--acento) 12%, transparent);
 }
 
 .leyenda li {

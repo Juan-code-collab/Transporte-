@@ -87,3 +87,30 @@ test('simplificar quita puntos alineados y conserva los extremos', () => {
   });
   assert.deepEqual(geo.features[0].geometry.coordinates, [[0, 0], [1, 0], [1, 1]]);
 });
+
+test('lineaTren usa el código de línea y corrige errores del dataset nacional', async () => {
+  const { lineaTren, arreglarTexto } = await import('../src/geo.js');
+  assert.equal(lineaTren({ IDLINEA: 'TREN DE LA COSTA1', Linea: 'Mitre' }), 'Tren de la Costa');
+  assert.equal(lineaTren({ IDLINEA: 'ROCA4', Linea: 'Sarmiento' }), 'Roca');
+  assert.equal(lineaTren({ IDLINEA: 'BELGRANO SURG', Linea: 'Belgrano Sur' }), 'Belgrano Sur');
+  assert.equal(lineaTren({ linea_2: 'San Martin' }), 'San Martín');
+  assert.equal(arreglarTexto('San MartÃ­n'), 'San Martín');
+});
+
+test('calleDe ordena los nombres del GCBA', async () => {
+  const { calleDe } = await import('../src/geo.js');
+  assert.equal(calleDe({ nombre: 'PERON, JUAN DOMINGO, TTE. GENERAL' }), 'Tte. General Juan Domingo Peron');
+  assert.equal(calleDe({ nombre: 'CEVALLOS, VIRREY' }), 'Virrey Cevallos');
+});
+
+test('comunasDe detecta las comunas que cruza un recorrido, aun sin vértices adentro', async () => {
+  const { comunasDe, prepararComunas } = await import('../src/geo.js');
+  const cuadrado = (n, x0, x1) => ({
+    properties: { comuna: n },
+    geometry: { type: 'Polygon', coordinates: [[[x0, -34.7], [x1, -34.7], [x1, -34.5], [x0, -34.5], [x0, -34.7]]] },
+  });
+  const comunas = prepararComunas({ features: [cuadrado(1, -58.40, -58.38), cuadrado(2, -58.38, -58.36), cuadrado(3, -58.36, -58.34)] });
+  // Un solo segmento que atraviesa la comuna 2 sin tener vértices en ella.
+  const f = { geometry: { type: 'LineString', coordinates: [[-58.39, -34.6], [-58.35, -34.6]] } };
+  assert.deepEqual(comunasDe(f, comunas), [1, 2, 3]);
+});

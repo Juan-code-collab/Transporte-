@@ -49,7 +49,7 @@ export const CONTORNO_CABA = [
   [-58.5310, -34.6150], [-58.5050, -34.5800], [-58.4880, -34.5500],
 ];
 
-function dentro([x, y], poligono) {
+export function dentro([x, y], poligono) {
   let adentro = false;
   for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
     const [xi, yi] = poligono[i];
@@ -69,32 +69,33 @@ export function pasaPorCaba(feature) {
 
 // Simplifica las líneas (Douglas-Peucker) para achicar archivos y acelerar el
 // dibujo. Tolerancia en grados: 0.00002 ≈ 2 m.
-export function simplificar(geojson, tolerancia = 0.00002) {
+export function simplificarPuntos(pts, tolerancia = 0.00002) {
+  if (pts.length < 3) return pts;
   const t2 = tolerancia * tolerancia;
-  const linea = (pts) => {
-    if (pts.length < 3) return pts;
-    const marcar = new Uint8Array(pts.length);
-    marcar[0] = marcar[pts.length - 1] = 1;
-    const pila = [[0, pts.length - 1]];
-    while (pila.length) {
-      const [a, b] = pila.pop();
-      let max = 0;
-      let idx = -1;
-      for (let i = a + 1; i < b; i++) {
-        const d = distancia2(pts[i], pts[a], pts[b]);
-        if (d > max) [max, idx] = [d, i];
-      }
-      if (max > t2) {
-        marcar[idx] = 1;
-        pila.push([a, idx], [idx, b]);
-      }
+  const marcar = new Uint8Array(pts.length);
+  marcar[0] = marcar[pts.length - 1] = 1;
+  const pila = [[0, pts.length - 1]];
+  while (pila.length) {
+    const [a, b] = pila.pop();
+    let max = 0;
+    let idx = -1;
+    for (let i = a + 1; i < b; i++) {
+      const d = distancia2(pts[i], pts[a], pts[b]);
+      if (d > max) [max, idx] = [d, i];
     }
-    return pts.filter((_, i) => marcar[i]);
-  };
+    if (max > t2) {
+      marcar[idx] = 1;
+      pila.push([a, idx], [idx, b]);
+    }
+  }
+  return pts.filter((_, i) => marcar[i]);
+}
+
+export function simplificar(geojson, tolerancia = 0.00002) {
   for (const f of geojson.features ?? []) {
     const g = f.geometry;
-    if (g?.type === 'LineString') g.coordinates = linea(g.coordinates);
-    if (g?.type === 'MultiLineString') g.coordinates = g.coordinates.map(linea);
+    if (g?.type === 'LineString') g.coordinates = simplificarPuntos(g.coordinates, tolerancia);
+    if (g?.type === 'MultiLineString') g.coordinates = g.coordinates.map((l) => simplificarPuntos(l, tolerancia));
   }
   return geojson;
 }
@@ -193,4 +194,154 @@ export function colorSubte(props) {
   if (c && /^#?[0-9a-f]{6}$/i.test(c)) return c.startsWith('#') ? c : `#${c}`;
   const linea = lineaDe(props);
   return COLORES_SUBTE[linea] ?? null;
+}
+
+// Algunos archivos vienen con los acentos rotos ("San MartÃ­n"): UTF-8 leído
+// como Latin-1. Se recompone; si no se puede, queda igual.
+export function arreglarTexto(texto) {
+  if (typeof texto !== 'string' || !/[ÃÂ]/.test(texto)) return texto;
+  try {
+    return decodeURIComponent(escape(texto));
+  } catch {
+    return texto;
+  }
+}
+
+export function arreglarPropiedades(geojson) {
+  for (const f of geojson.features ?? []) {
+    if (!f.properties) continue;
+    f.properties = Object.fromEntries(Object.entries(f.properties).map(([k, v]) => [arreglarTexto(k), arreglarTexto(v)]));
+  }
+  return geojson;
+}
+
+const sinAcentos = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// Líneas de tren del AMBA. Se buscan en el código de línea, la descripción y
+// el nombre: el dataset nacional marca el Tren de la Costa como "Mitre" y un
+// ramal del Roca como "Sarmiento", pero el código (IDLINEA) es correcto.
+export const LINEAS_TREN = ['Belgrano Norte', 'Belgrano Sur', 'Mitre', 'Roca', 'San Martín', 'Sarmiento', 'Tren de la Costa', 'Urquiza'];
+
+export function lineaTren(props) {
+  const campos = ['IDLINEA', 'Descrip', 'Linea', 'linea_2', 'linea', 'name', 'ref'];
+  // Primero los nombres más largos, para que "Belgrano Sur" no quede como "Mitre".
+  const nombres = [...LINEAS_TREN].sort((a, b) => b.length - a.length);
+  for (const campo of campos) {
+    const v = props?.[campo];
+    if (!v) continue;
+    const t = sinAcentos(arreglarTexto(v));
+    const encontrada = nombres.find((n) => t.includes(sinAcentos(n)));
+    if (encontrada) return encontrada;
+  }
+  return null;
+}
+
+// "PERON, JUAN DOMINGO, TTE. GENERAL" → "Tte. General Juan Domingo Peron".
+export function calleDe(props) {
+  const v = props?.nombre ?? props?.NOMBRE ?? props?.name;
+  if (!v) return null;
+  const partes = String(v).split(/\s*,\s*/).filter(Boolean);
+  const ordenado = [...partes.slice(1).reverse(), partes[0]].join(' ');
+  return ordenado.toLowerCase().replace(/(^|[\s.(/-])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
+}
+
+export function coincideTexto(texto, buscado) {
+  return sinAcentos(texto ?? '').includes(sinAcentos(buscado));
+}
+
+// ------------------------------------------------------------------ comunas
+
+// Prepara los polígonos de comunas para consultas rápidas.
+export function prepararComunas(geojson) {
+  return (geojson.features ?? [])
+    .map((f) => {
+      const g = f.geometry;
+      const poligonos = g?.type === 'Polygon' ? [g.coordinates] : g?.type === 'MultiPolygon' ? g.coordinates : [];
+      const puntos = poligonos.flat(2);
+      const xs = puntos.map((p) => p[0]);
+      const ys = puntos.map((p) => p[1]);
+      return {
+        numero: Number(f.properties?.comuna ?? f.properties?.COMUNA),
+        barrios: f.properties?.barrios ?? f.properties?.BARRIOS ?? '',
+        poligonos,
+        caja: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+        feature: f,
+      };
+    })
+    .filter((c) => c.numero && c.poligonos.length)
+    .sort((a, b) => a.numero - b.numero);
+}
+
+function enComuna([x, y], comuna) {
+  const [x0, y0, x1, y1] = comuna.caja;
+  if (x < x0 || x > x1 || y < y0 || y > y1) return false;
+  // Par/impar sobre todos los anillos de cada polígono (respeta huecos).
+  return comuna.poligonos.some((anillos) => anillos.reduce((adentro, anillo) => (dentro([x, y], anillo) ? !adentro : adentro), false));
+}
+
+// Grilla de ~50 m sobre la Ciudad: cada celda guarda el número de comuna de
+// su centro. Consultar un punto es instantáneo; cerca de un límite el error
+// es de media celda (~25 m), suficiente para saber por dónde pasa un
+// recorrido. Se arma una sola vez por conjunto de comunas.
+const PASO = 0.0005;
+const grillas = new WeakMap();
+
+function grillaDe(comunas) {
+  let g = grillas.get(comunas);
+  if (g) return g;
+  // Contornos simplificados (~5 m) para que armar la grilla sea rápido.
+  const simples = comunas.map((c) => ({
+    ...c,
+    poligonos: c.poligonos.map((anillos) => anillos.map((a) => simplificarPuntos(a, 0.00005))),
+  }));
+  const x0 = Math.min(...comunas.map((c) => c.caja[0]));
+  const y0 = Math.min(...comunas.map((c) => c.caja[1]));
+  const ancho = Math.ceil((Math.max(...comunas.map((c) => c.caja[2])) - x0) / PASO) + 1;
+  const alto = Math.ceil((Math.max(...comunas.map((c) => c.caja[3])) - y0) / PASO) + 1;
+  const celdas = new Uint8Array(ancho * alto);
+  for (const c of simples) {
+    const [cx0, cy0, cx1, cy1] = c.caja;
+    for (let j = Math.floor((cy0 - y0) / PASO); j <= Math.ceil((cy1 - y0) / PASO); j++) {
+      for (let i = Math.floor((cx0 - x0) / PASO); i <= Math.ceil((cx1 - x0) / PASO); i++) {
+        if (i < 0 || j < 0 || i >= ancho || j >= alto || celdas[j * ancho + i]) continue;
+        if (enComuna([x0 + (i + 0.5) * PASO, y0 + (j + 0.5) * PASO], c)) celdas[j * ancho + i] = c.numero;
+      }
+    }
+  }
+  g = { x0, y0, ancho, alto, celdas };
+  grillas.set(comunas, g);
+  return g;
+}
+
+function comunaEn([x, y], g) {
+  const i = Math.floor((x - g.x0) / PASO);
+  const j = Math.floor((y - g.y0) / PASO);
+  if (i < 0 || j < 0 || i >= g.ancho || j >= g.alto) return 0;
+  return g.celdas[j * g.ancho + i];
+}
+
+// Números de las comunas por las que pasa un recorrido. Además de los
+// vértices, prueba puntos intermedios cada ~25 m para no perder tramos largos
+// que cruzan una comuna sin tener un vértice adentro.
+export function comunasDe(feature, comunas) {
+  const c = feature.geometry?.coordinates;
+  if (!c?.length || !comunas.length) return [];
+  const g = grillaDe(comunas);
+  const tramos = [];
+  const juntar = (a) => (typeof a[0][0] === 'number' ? tramos.push(a) : a.forEach(juntar));
+  juntar(feature.geometry.type === 'LineString' ? [c] : c);
+  const resultado = new Set();
+  for (const tramo of tramos) {
+    for (let i = 0; i < tramo.length; i++) {
+      resultado.add(comunaEn(tramo[i], g));
+      const sig = tramo[i + 1];
+      if (!sig) continue;
+      const pasos = Math.min(400, Math.ceil(Math.hypot(sig[0] - tramo[i][0], sig[1] - tramo[i][1]) / (PASO / 2)));
+      for (let k = 1; k < pasos; k++) {
+        resultado.add(comunaEn([tramo[i][0] + ((sig[0] - tramo[i][0]) * k) / pasos, tramo[i][1] + ((sig[1] - tramo[i][1]) * k) / pasos], g));
+      }
+    }
+  }
+  resultado.delete(0);
+  return [...resultado].sort((a, b) => a - b);
 }

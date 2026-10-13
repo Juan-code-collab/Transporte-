@@ -52,6 +52,26 @@ export const LINEAS_JURISDICCION_CIUDAD = [
   'EBUS',
 ];
 
+// Límites de las 15 comunas (para el filtro por comuna).
+export const COMUNAS = {
+  portal: PORTAL_CIUDAD,
+  dataset: 'comunas',
+  recurso: /comunas/i,
+  respaldo: 'https://cdn.buenosaires.gob.ar/datosabiertos/datasets/innovacion-transformacion-digital/comunas/comunas.geojson',
+};
+
+// Colores para distinguir las líneas de tren en el mapa.
+export const COLORES_TREN = {
+  'Belgrano Norte': '#8e44ad',
+  'Belgrano Sur': '#16a085',
+  Mitre: '#2471a3',
+  Roca: '#c0392b',
+  'San Martín': '#d35400',
+  Sarmiento: '#1e8449',
+  'Tren de la Costa': '#b7950b',
+  Urquiza: '#5d6d7e',
+};
+
 export const CAPAS = [
   {
     id: 'subte',
@@ -77,9 +97,10 @@ export const CAPAS = [
     color: '#5a3e1b',
     grosor: 4,
     visible: true,
+    // Nación primero: el dataset de la Ciudad no trae Urquiza ni Belgrano Norte.
     ckan: [
-      { portal: PORTAL_CIUDAD, dataset: 'estaciones-ferrocarril', recurso: /red|l[ií]nea|recorrido/i },
       { portal: PORTAL_NACION, dataset: RMBA, recurso: /ferrocarril - l[ií]neas/i },
+      { portal: PORTAL_CIUDAD, dataset: 'estaciones-ferrocarril', recurso: /red|l[ií]nea|recorrido/i },
     ],
     overpass: consultaOverpass('relation["route"="train"];'),
   },
