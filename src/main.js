@@ -278,7 +278,7 @@ function dibujar(id) {
 
 // Las capas finas (ciclovías, colectivos) quedan por encima de las gruesas.
 function ordenarCapas() {
-  for (const id of ['autopistas', 'trenes', 'colectivos', 'subte', 'ciclovias', 'proyectos']) {
+  for (const id of ['autopistas', 'trenes', 'colectivos', 'subte', 'ciclovias', 'trambus', 'linea-f']) {
     estado.get(id)?.capaLeaflet?.bringToFront();
   }
 }

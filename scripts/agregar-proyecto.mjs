@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// Convierte un shapefile de líneas (.shp) a GeoJSON y lo suma a la capa
-// "Proyectos" (public/proyectos/proyectos.geojson).
+// Convierte un shapefile de líneas (.shp) a GeoJSON y lo guarda en
+// public/proyectos/<capa>.geojson (por ejemplo la capa "linea-f" o "trambus").
+// Para que aparezca en el mapa, la capa tiene que estar en src/capas.js con
+// `archivo: 'proyectos/<capa>.geojson'`.
 //
 // Uso:
-//   npm run proyecto -- archivo.shp --nombre "Línea F" [--color "#8e44ad"]
+//   npm run proyecto -- archivo.shp --capa trambus --nombre "Trambus T1a" [--color "#d35400"]
 //
 // Coordenadas: si el archivo ya está en lon/lat se usa tal cual; si está en
 // metros alrededor de 100.000 se asume Gauss-Krüger Buenos Aires (GKBA), el
@@ -16,7 +18,6 @@ import { fileURLToPath } from 'node:url';
 import proj4 from 'proj4';
 import { redondear } from '../src/geo.js';
 
-const DESTINO = fileURLToPath(new URL('../public/proyectos/proyectos.geojson', import.meta.url));
 
 // GKBA del GCBA sobre POSGAR (equivalente a WGS84 a esta escala). Con la
 // variante vieja sobre Campo Inchauspe la traza de la Línea F quedaba ~50 m
@@ -75,10 +76,12 @@ export function aLonLat(tramos) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const archivo = process.argv[2];
   const nombre = argumento('nombre');
-  if (!archivo || !nombre) {
-    console.error('Uso: npm run proyecto -- archivo.shp --nombre "Nombre" [--color "#rrggbb"]');
+  const capa = argumento('capa');
+  if (!archivo || !nombre || !capa) {
+    console.error('Uso: npm run proyecto -- archivo.shp --capa <id> --nombre "Nombre" [--color "#rrggbb"]');
     process.exit(1);
   }
+  const DESTINO = fileURLToPath(new URL(`../public/proyectos/${capa}.geojson`, import.meta.url));
   const tramos = aLonLat(leerShp(await readFile(archivo)));
   const feature = {
     type: 'Feature',
@@ -87,7 +90,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   };
   await mkdir(dirname(DESTINO), { recursive: true });
   const actual = await readFile(DESTINO, 'utf8').then(JSON.parse, () => ({ type: 'FeatureCollection', features: [] }));
-  // Si ya existe un proyecto con ese nombre, se reemplaza.
+  // Si ya existe una traza con ese nombre en la capa, se reemplaza.
   actual.features = actual.features.filter((f) => f.properties.nombre !== nombre).concat(feature);
   await writeFile(DESTINO, `${JSON.stringify(redondear(actual))}\n`);
   console.log(`✓ "${nombre}": ${tramos.length} tramo(s), ${tramos.flat().length} puntos → ${DESTINO}`);
