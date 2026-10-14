@@ -89,7 +89,7 @@ function estiloDe(capa, props) {
   if (capa.id === 'subte') color = colorSubte(props) ?? color;
   if (capa.id === 'trenes') color = COLORES_TREN[lineaTren(props)] ?? color;
   if (capa.id === 'colectivos') color = JURISDICCIONES[jurisdiccionDe(props)]?.color ?? '#7f8c8d';
-  if (/^#[0-9a-f]{6}$/i.test(props.color ?? '') && capa.archivo) color = props.color;
+  if (/^#[0-9a-f]{6}$/i.test(props.color ?? '') && (capa.archivo || capa.kml)) color = props.color;
   return { color, weight: capa.grosor, opacity: 0.85, dashArray: capa.discontinua ? '10 6' : null };
 }
 
@@ -100,6 +100,7 @@ function escapar(texto) {
 function tituloDe(capa, props) {
   if (capa.id === 'subte') return lineaDe(props) === 'P' ? 'Premetro' : `Subte — línea ${lineaDe(props) ?? '?'}`;
   if (capa.id === 'autopistas') return autopistaDe(props) ?? 'Autopista';
+  if (capa.id === 'ebus') return ['eBus', props.recorrido, props.nombre].filter(Boolean).join(' — ');
   if (capa.id === 'trenes') return `Tren ${lineaTren(props) ?? ''}`.trim();
   if (capa.id === 'ciclovias') return `Ciclovía — ${calleDe(props) ?? 'sin nombre'}`;
   if (capa.id === 'colectivos') return `Colectivo — línea ${lineaDe(props) ?? '?'}`;
@@ -163,6 +164,11 @@ const FILTROS = {
     valor: (p) => lineaDe(p),
     etiqueta: (v) => (v === 'P' ? 'Premetro' : `Línea ${v}`),
     color: (v) => COLORES_SUBTE[v],
+  },
+  ebus: {
+    tipo: 'lista',
+    valor: (p) => p.recorrido ?? p.nombre,
+    etiqueta: (v) => v,
   },
   autopistas: {
     tipo: 'lista',
@@ -315,7 +321,7 @@ function dibujar(id) {
 
 // Las capas finas (ciclovías, colectivos) quedan por encima de las gruesas.
 function ordenarCapas() {
-  for (const id of ['autopistas', 'trenes', 'colectivos', 'subte', 'ciclovias', 'trambus', 'linea-f']) {
+  for (const id of ['autopistas', 'trenes', 'colectivos', 'ebus', 'subte', 'ciclovias', 'trambus', 'linea-f']) {
     estado.get(id)?.capaLeaflet?.bringToFront();
   }
 }

@@ -9,6 +9,7 @@ Mapa interactivo de la Ciudad de Buenos Aires con los recorridos de:
 | Colectivos (Ciudad, Nacional y Provincial) | [Recorridos de colectivos](https://data.buenosaires.gob.ar/dataset/colectivos-recorridos) (GCBA) + [Recorridos RMBA](https://datos.transporte.gob.ar/dataset/recorridos-de-lineas-de-transporte-rmba-jn) (Nación) | OpenStreetMap |
 | Autopistas | OpenStreetMap (el GCBA no publica el trazado) | — |
 | Ciclovías | [Ciclovías](https://data.buenosaires.gob.ar/dataset/ciclovias) (GCBA) | OpenStreetMap |
+| eBus | [Mapa de Google My Maps](https://www.google.com/maps/d/viewer?mid=1EpsQpmW24YGDZPgTmJHPvp-JtDjSEdw) (KML) | Versión anterior publicada |
 | Línea F (proyecto) y Trambus | Shapefiles cargados a mano (`public/proyectos/`) | — |
 
 Hecho con [Leaflet](https://leafletjs.com) y [Vite](https://vite.dev), sin backend: es un sitio estático.
