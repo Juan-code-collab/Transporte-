@@ -12,8 +12,6 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - run: |
-          curl -sSL "https://www.google.com/maps/d/kml?mid=1EpsQpmW24YGDZPgTmJHPvp-JtDjSEdw&forcekml=1" | head -c 1500; echo
       - run: npm run datos -- --solo ebus
         continue-on-error: true
       - run: |

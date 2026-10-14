@@ -362,27 +362,35 @@ export function kmlAGeojson(texto) {
   const features = [];
   const etiqueta = (bloque, nombre) => bloque.match(new RegExp(`<${nombre}[^>]*>([\\s\\S]*?)</${nombre}>`))?.[1];
   const limpiar = (t) => (t ?? '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  for (const [, pm] of texto.matchAll(/<Placemark[^>]*>([\s\S]*?)<\/Placemark>/g)) {
-    const lineas = [...pm.matchAll(/<LineString[^>]*>([\s\S]*?)<\/LineString>/g)]
-      .map(([, ls]) =>
-        (etiqueta(ls, 'coordinates') ?? '')
-          .trim()
-          .split(/\s+/)
-          .map((p) => p.split(',').slice(0, 2).map(Number))
-          .filter((p) => p.length === 2 && p.every(Number.isFinite)),
-      )
-      .filter((l) => l.length > 1);
-    if (!lineas.length) continue;
-    const color = etiqueta(pm, 'styleUrl')?.match(/line-([0-9A-Fa-f]{6})/)?.[1];
-    features.push({
-      type: 'Feature',
-      properties: {
-        nombre: limpiar(etiqueta(pm, 'name')) || 'Sin nombre',
-        ...(limpiar(etiqueta(pm, 'description')) ? { descripcion: limpiar(etiqueta(pm, 'description')) } : {}),
-        ...(color ? { color: `#${color.toLowerCase()}` } : {}),
-      },
-      geometry: lineas.length === 1 ? { type: 'LineString', coordinates: lineas[0] } : { type: 'MultiLineString', coordinates: lineas },
-    });
+  // En My Maps cada capa del mapa es un <Folder>: su nombre identifica el
+  // recorrido (los trazos suelen llamarse sólo "IDA" / "VUELTA").
+  const carpetas = [...texto.matchAll(/<Folder[^>]*>([\s\S]*?)<\/Folder>/g)].map(([, f]) => f);
+  for (const carpeta of carpetas.length ? carpetas : [texto]) {
+    const recorrido = carpetas.length ? limpiar(etiqueta(carpeta.split(/<Placemark/)[0], 'name')) : '';
+    for (const [, pm] of carpeta.matchAll(/<Placemark[^>]*>([\s\S]*?)<\/Placemark>/g)) {
+      const lineas = [...pm.matchAll(/<LineString[^>]*>([\s\S]*?)<\/LineString>/g)]
+        .map(([, ls]) =>
+          (etiqueta(ls, 'coordinates') ?? '')
+            .trim()
+            .split(/\s+/)
+            .map((p) => p.split(',').slice(0, 2).map(Number))
+            .filter((p) => p.length === 2 && p.every(Number.isFinite)),
+        )
+        .filter((l) => l.length > 1);
+      if (!lineas.length) continue;
+      const color = etiqueta(pm, 'styleUrl')?.match(/line-([0-9A-Fa-f]{6})/)?.[1];
+      const descripcion = limpiar(etiqueta(pm, 'description'));
+      features.push({
+        type: 'Feature',
+        properties: {
+          ...(recorrido ? { recorrido } : {}),
+          nombre: limpiar(etiqueta(pm, 'name')) || 'Sin nombre',
+          ...(descripcion ? { descripcion } : {}),
+          ...(color ? { color: `#${color.toLowerCase()}` } : {}),
+        },
+        geometry: lineas.length === 1 ? { type: 'LineString', coordinates: lineas[0] } : { type: 'MultiLineString', coordinates: lineas },
+      });
+    }
   }
   return { type: 'FeatureCollection', features };
 }

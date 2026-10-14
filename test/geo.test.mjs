@@ -128,6 +128,6 @@ test('kmlAGeojson toma las líneas de Google My Maps con nombre y color', async 
   </Folder></Document></kml>`;
   const geo = kmlAGeojson(kml);
   assert.equal(geo.features.length, 1);
-  assert.deepEqual(geo.features[0].properties, { nombre: 'eBus ida', descripcion: 'Retiro - Constitución', color: '#0288d1' });
+  assert.deepEqual(geo.features[0].properties, { recorrido: 'Capa', nombre: 'eBus ida', descripcion: 'Retiro - Constitución', color: '#0288d1' });
   assert.deepEqual(geo.features[0].geometry.coordinates, [[-58.375, -34.592], [-58.38, -34.627]]);
 });

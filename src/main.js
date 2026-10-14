@@ -100,6 +100,7 @@ function escapar(texto) {
 function tituloDe(capa, props) {
   if (capa.id === 'subte') return lineaDe(props) === 'P' ? 'Premetro' : `Subte — línea ${lineaDe(props) ?? '?'}`;
   if (capa.id === 'autopistas') return autopistaDe(props) ?? 'Autopista';
+  if (capa.id === 'ebus') return ['eBus', props.recorrido, props.nombre].filter(Boolean).join(' — ');
   if (capa.id === 'trenes') return `Tren ${lineaTren(props) ?? ''}`.trim();
   if (capa.id === 'ciclovias') return `Ciclovía — ${calleDe(props) ?? 'sin nombre'}`;
   if (capa.id === 'colectivos') return `Colectivo — línea ${lineaDe(props) ?? '?'}`;
@@ -166,7 +167,7 @@ const FILTROS = {
   },
   ebus: {
     tipo: 'lista',
-    valor: (p) => p.nombre,
+    valor: (p) => p.recorrido ?? p.nombre,
     etiqueta: (v) => v,
   },
   autopistas: {
