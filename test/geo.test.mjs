@@ -114,3 +114,20 @@ test('comunasDe detecta las comunas que cruza un recorrido, aun sin vértices ad
   const f = { geometry: { type: 'LineString', coordinates: [[-58.39, -34.6], [-58.35, -34.6]] } };
   assert.deepEqual(comunasDe(f, comunas), [1, 2, 3]);
 });
+
+test('kmlAGeojson toma las líneas de Google My Maps con nombre y color', async () => {
+  const { kmlAGeojson } = await import('../src/geo.js');
+  const kml = `<?xml version="1.0"?><kml><Document><Folder><name>Capa</name>
+    <Placemark><name>eBus ida</name><description><![CDATA[Retiro - Constitución]]></description>
+      <styleUrl>#line-0288D1-5000</styleUrl>
+      <LineString><tessellate>1</tessellate><coordinates>
+        -58.375,-34.592,0
+        -58.380,-34.627,0
+      </coordinates></LineString></Placemark>
+    <Placemark><name>Parada</name><Point><coordinates>-58.37,-34.6,0</coordinates></Point></Placemark>
+  </Folder></Document></kml>`;
+  const geo = kmlAGeojson(kml);
+  assert.equal(geo.features.length, 1);
+  assert.deepEqual(geo.features[0].properties, { nombre: 'eBus ida', descripcion: 'Retiro - Constitución', color: '#0288d1' });
+  assert.deepEqual(geo.features[0].geometry.coordinates, [[-58.375, -34.592], [-58.38, -34.627]]);
+});

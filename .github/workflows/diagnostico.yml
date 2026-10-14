@@ -1,0 +1,22 @@
+# Temporal: prueba la descarga real desde la rama. Se borra después.
+name: Diagnóstico de fuentes
+on:
+  push:
+    branches: ['claude/**']
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: |
+          curl -sSL "https://www.google.com/maps/d/kml?mid=1EpsQpmW24YGDZPgTmJHPvp-JtDjSEdw&forcekml=1" | head -c 1500; echo
+      - run: npm run datos -- --solo ebus
+        continue-on-error: true
+      - run: |
+          node -e '
+          const d = JSON.parse(require("fs").readFileSync("public/data/ebus.geojson"));
+          for (const f of d.features) console.log(JSON.stringify(f.properties).slice(0, 200), f.geometry.type, JSON.stringify(f.geometry.coordinates).length, "comunas:", f.properties._comunas);'

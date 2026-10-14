@@ -171,6 +171,16 @@ export const CAPAS = [
       ].join('\n'),
     ),
   },
+  // Recorrido del eBus desde un mapa de Google My Maps (exportado como KML).
+  // Si se edita ese mapa, el cambio se toma en la próxima publicación.
+  {
+    id: 'ebus',
+    nombre: 'eBus',
+    color: '#0288d1',
+    grosor: 4,
+    visible: true,
+    kml: 'https://www.google.com/maps/d/kml?mid=1EpsQpmW24YGDZPgTmJHPvp-JtDjSEdw&forcekml=1',
+  },
   // Trazas cargadas a mano desde shapefiles (npm run proyecto); no se
   // descargan de ningún portal. Punteadas porque son proyectos.
   {

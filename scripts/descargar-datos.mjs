@@ -14,6 +14,7 @@ import {
   arreglarPropiedades,
   comunasDe,
   esWgs84,
+  kmlAGeojson,
   lineaDe,
   overpassAGeojson,
   pasaPorCaba,
@@ -150,6 +151,22 @@ async function sumarExtra(capa, res) {
   console.log(`  · ${extra.length} recorridos de ${nombre} (OpenStreetMap)`);
 }
 
+// Mapa de Google My Maps (u otro KML público).
+async function desdeKml(url) {
+  for (let i = 1; ; i++) {
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': AGENTE }, signal: AbortSignal.timeout(120000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status} en ${url}`);
+      const texto = await r.text();
+      if (!/<kml/i.test(texto)) throw new Error('la respuesta no es un KML (¿el mapa es público?)');
+      return { geojson: kmlAGeojson(texto), fuente: 'Google My Maps', url };
+    } catch (e) {
+      if (i >= 3) throw e;
+      await new Promise((ok) => setTimeout(ok, 3000 * i));
+    }
+  }
+}
+
 // Todas las fuentes CKAN de una capa, sumadas. Una línea que ya vino de una
 // fuente anterior no se vuelve a agregar.
 async function desdeCkanCombinado(fuentes, soloCaba) {
@@ -190,6 +207,7 @@ async function descargar(capa, fuenteForzada) {
     if (capa.combinar) intentos.push(['ckan', () => desdeCkanCombinado(capa.ckan, capa.soloCaba)]);
     else for (const f of capa.ckan) intentos.push(['ckan', () => desdeCkan(f)]);
   }
+  if (capa.kml) intentos.push(['kml', () => desdeKml(capa.kml)]);
   if (capa.overpass && fuenteForzada !== 'ckan') intentos.push(['overpass', () => desdeOverpass(capa.overpass)]);
 
   for (const [tipo, intento] of intentos) {
