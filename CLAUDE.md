@@ -6,6 +6,7 @@ Juan.
 ## People
 | Who | Role |
 |-----|------|
+| **Gabriel** | (rol a confirmar) — involucrado en proyecto Parque Avellaneda |
 | **Sec. Transporte** | Secretaría de Transporte (organismo, no persona) |
 
 ## Terms
@@ -18,6 +19,7 @@ Juan.
 | Name | What |
 |------|------|
 | **Beauchef** | Cambio de sentido de la calle Beauchef. Requiere proyecto vial y proyecto de ley a la Legislatura; ambos pendientes de la Sec. de Transporte. Ver memory/projects/beauchef.md |
+| **Parque Avellaneda** | Proyecto (detalle a confirmar). Pendiente: reunión con Gabriel y áreas involucradas. Ver memory/projects/parque-avellaneda.md |
 
 ## Preferences
 - Habla en español.
