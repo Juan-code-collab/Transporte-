@@ -501,6 +501,7 @@ function cambiarCiudad(id) {
   ciudadActual = id;
   const ciudad = CIUDADES[id];
   history.replaceState(null, '', ciudad.hash ? `#${ciudad.hash}` : location.pathname + location.search);
+  document.querySelector('h1').textContent = document.title = ciudad.titulo;
   document.getElementById('seccion-comuna').hidden = !ciudad.comunas;
   if (!ciudad.comunas && comunaElegida) {
     document.getElementById('filtro-comuna').value = '';

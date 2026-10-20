@@ -1,6 +1,7 @@
 # Transporte CABA
 
-Mapa interactivo de la Ciudad de Buenos Aires con los recorridos de:
+Mapa interactivo de la Ciudad de Buenos Aires (y de Santiago de Chile, ver
+abajo) con los recorridos de:
 
 | Capa | Fuente principal | Respaldo |
 | --- | --- | --- |
@@ -11,6 +12,19 @@ Mapa interactivo de la Ciudad de Buenos Aires con los recorridos de:
 | Ciclovías | [Ciclovías](https://data.buenosaires.gob.ar/dataset/ciclovias) (GCBA) | OpenStreetMap |
 | eBus | [Mapa de Google My Maps](https://www.google.com/maps/d/viewer?mid=1EpsQpmW24YGDZPgTmJHPvp-JtDjSEdw) (KML) | Versión anterior publicada |
 | Línea F (proyecto) y Trambus | Shapefiles cargados a mano (`public/proyectos/`) | — |
+
+### Santiago de Chile
+
+Se elige en el selector **Ciudad** (o con el enlace `…/#santiago`).
+
+| Capa | Fuente principal | Respaldo |
+| --- | --- | --- |
+| Metro de Santiago | [GTFS de DTPM](https://www.dtpm.cl/index.php/gtfs-vigente) (Red Metropolitana de Movilidad) | OpenStreetMap |
+| Buses Red Movilidad | [GTFS de DTPM](https://www.dtpm.cl/index.php/gtfs-vigente) | Versión anterior publicada |
+
+Del GTFS se toma, para cada servicio y sentido, el trazado que usan más
+viajes. El metro se filtra por línea y los buses por número de servicio
+(`210, B12`).
 
 Hecho con [Leaflet](https://leafletjs.com) y [Vite](https://vite.dev), sin backend: es un sitio estático.
 
@@ -126,6 +140,7 @@ Gauss-Krüger Buenos Aires (GKBA), el sistema del GCBA.
 ```
 src/capas.js                 configuración de capas y fuentes
 src/geo.js                   conversión Overpass→GeoJSON, línea y jurisdicción
+scripts/gtfs.mjs             lectura de feeds GTFS (Santiago)
 src/main.js                  la app (Leaflet)
 scripts/descargar-datos.mjs  descarga de datos
 test/                        tests (`npm test`)

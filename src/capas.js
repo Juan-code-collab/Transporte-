@@ -19,8 +19,8 @@
 // Ciudades que muestra la app: el selector de arriba del panel cambia de una a
 // otra (y el enlace con #santiago abre directamente Santiago).
 export const CIUDADES = {
-  ba: { nombre: 'Buenos Aires', centro: [-34.6118, -58.4173], zoom: 12, comunas: true },
-  scl: { nombre: 'Santiago de Chile', centro: [-33.4489, -70.6693], zoom: 12, hash: 'santiago' },
+  ba: { nombre: 'Buenos Aires', titulo: 'Transporte CABA', centro: [-34.6118, -58.4173], zoom: 12, comunas: true },
+  scl: { nombre: 'Santiago de Chile', titulo: 'Transporte Santiago', centro: [-33.4489, -70.6693], zoom: 12, hash: 'santiago' },
 };
 
 export const PORTAL_CIUDAD = 'https://data.buenosaires.gob.ar';
