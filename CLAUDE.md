@@ -6,7 +6,7 @@ Juan.
 ## People
 | Who | Role |
 |-----|------|
-| **Gabriel** | (rol a confirmar) — involucrado en proyecto Parque Avellaneda |
+| **Gabriel** | Mi jefe. Involucrado en proyecto Parque Avellaneda |
 | **Sec. Transporte** | Secretaría de Transporte (organismo, no persona) |
 
 ## Terms
