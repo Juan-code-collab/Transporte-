@@ -1,4 +1,4 @@
-# Temporal: inspección de fuentes de datos. Se borra después.
+# Temporal: prueba de descarga de Santiago. Se borra después.
 name: Diagnóstico de fuentes
 on:
   push:
@@ -11,6 +11,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: bash .diag/diag.sh
-        continue-on-error: true
-      - run: node .diag/diag.mjs
+      - run: npm ci
+      - run: npm run datos -- --solo metro-scl,buses-scl
+      - run: |
+          ls -la public/data
+          node -e '
+          const fs=require("fs");
+          for (const f of ["metro-scl","buses-scl"]) {
+            const p=`public/data/${f}.geojson`; if(!fs.existsSync(p)){console.log(f,"FALTA");continue;}
+            const g=JSON.parse(fs.readFileSync(p));
+            const s=new Map(); for(const x of g.features){const k=x.properties.servicio??x.properties.ref??x.properties.name; s.set(k,(x.properties.color??x.properties.colour)+" "+(x.properties.nombre??x.properties.name??""));}
+            console.log(f, g.features.length, "features", s.size, "servicios", JSON.stringify(g.features[0]?.properties));
+            console.log([...s].slice(0, f==="metro-scl"?50:40).map(([k,v])=>k+" "+v).join("\n"));
+          }'
+          cat public/data/manifest.json

@@ -34,7 +34,7 @@ jobs:
       - name: Traer datos publicados
         run: |
           base="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/data"
-          for f in manifest.json comunas.geojson subte.geojson trenes.geojson colectivos.geojson autopistas.geojson ciclovias.geojson ebus.geojson; do
+          for f in manifest.json comunas.geojson subte.geojson trenes.geojson colectivos.geojson autopistas.geojson ciclovias.geojson ebus.geojson metro-scl.geojson buses-scl.geojson; do
             curl -fsSL -o "public/data/$f" "$base/$f" || rm -f "public/data/$f"
           done
       # Si alguna fuente falla y no hay datos previos, la app consulta

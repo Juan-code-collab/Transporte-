@@ -10,7 +10,18 @@
 //   2. `overpass`: consulta a OpenStreetMap vía Overpass API, como respaldo o
 //      cuando el Gobierno no publica la geometría (p. ej. autopistas).
 //
+//   3. `gtfs`: feed GTFS (horarios y trazados de transporte público). Se usa
+//      para los buses y el metro de Santiago (DTPM).
+//
 // `soloCaba`: descarta recorridos que no pasan por la Ciudad.
+// `ciudad`: a qué ciudad pertenece la capa (por defecto Buenos Aires).
+
+// Ciudades que muestra la app: el selector de arriba del panel cambia de una a
+// otra (y el enlace con #santiago abre directamente Santiago).
+export const CIUDADES = {
+  ba: { nombre: 'Buenos Aires', centro: [-34.6118, -58.4173], zoom: 12, comunas: true },
+  scl: { nombre: 'Santiago de Chile', centro: [-33.4489, -70.6693], zoom: 12, hash: 'santiago' },
+};
 
 export const PORTAL_CIUDAD = 'https://data.buenosaires.gob.ar';
 export const PORTAL_NACION = 'https://datos.transporte.gob.ar';
@@ -27,10 +38,20 @@ export const OVERPASS_APIS = [
 // liviano para Overpass que buscar el límite administrativo; lo que queda
 // afuera de CABA se recorta después con `soloCaba`.
 const BBOX_CABA = '-34.71,-58.54,-34.52,-58.33';
+const BBOX_SANTIAGO = '-33.70,-70.90,-33.25,-70.40';
 
-export function consultaOverpass(cuerpo) {
-  return `[out:json][timeout:180][bbox:${BBOX_CABA}];\n(\n${cuerpo}\n);\nout geom;`;
+export function consultaOverpass(cuerpo, bbox = BBOX_CABA) {
+  return `[out:json][timeout:180][bbox:${bbox}];\n(\n${cuerpo}\n);\nout geom;`;
 }
+
+// GTFS vigente del DTPM (Directorio de Transporte Público Metropolitano de
+// Santiago): se busca en su página el .zip más reciente; si la página cambia,
+// se usa el que figura en el catálogo de Transitland.
+export const GTFS_SANTIAGO = {
+  pagina: 'https://www.dtpm.cl/index.php/gtfs-vigente',
+  patron: /\/descargas\/gtfs\/GTFS_(\d{8})\.zip/g,
+  catalogo: 'https://raw.githubusercontent.com/transitland/transitland-atlas/main/feeds/dtpm.cl.dmfr.json',
+};
 
 // Colores oficiales de las líneas de subte (respaldo si el dato no trae color).
 export const COLORES_SUBTE = {
@@ -200,5 +221,26 @@ export const CAPAS = [
     visible: true,
     discontinua: true,
     archivo: 'proyectos/trambus.geojson',
+  },
+
+  // --------------------------------------------------------- Santiago de Chile
+  {
+    id: 'metro-scl',
+    ciudad: 'scl',
+    nombre: 'Metro de Santiago',
+    color: '#cc0000',
+    grosor: 5,
+    visible: true,
+    gtfs: { ...GTFS_SANTIAGO, tipos: [1, 2] }, // metro (y tren urbano si viene en el feed)
+    overpass: consultaOverpass('relation["route"="subway"]["network"="Metro de Santiago"];', BBOX_SANTIAGO),
+  },
+  {
+    id: 'buses-scl',
+    ciudad: 'scl',
+    nombre: 'Buses Red Movilidad',
+    color: '#d6001c',
+    grosor: 2,
+    visible: false, // capa pesada: se activa a demanda
+    gtfs: { ...GTFS_SANTIAGO, tipos: [3] },
   },
 ];
