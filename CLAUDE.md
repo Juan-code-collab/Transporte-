@@ -23,4 +23,5 @@ Juan.
 
 ## Preferences
 - Habla en español.
+- No preguntar tanto: anotar directo con lo que da, preguntar solo si es imprescindible.
 - Pendientes en TASKS.md (commitear y pushear tras cada cambio: la sesión cloud es efímera).
