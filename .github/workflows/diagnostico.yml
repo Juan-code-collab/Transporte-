@@ -1,0 +1,16 @@
+# Temporal: inspección de fuentes de datos. Se borra después.
+name: Diagnóstico de fuentes
+on:
+  push:
+    branches: ['claude/**']
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bash .diag/diag.sh
+        continue-on-error: true
+      - run: node .diag/diag.mjs
