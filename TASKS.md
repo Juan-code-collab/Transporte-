@@ -1,6 +1,7 @@
 # Tasks
 
 ## Active
+- [ ] **Tránsito: ver PPT para la reunión con Gabriel** - reunión vie 23/10
 - [ ] **Parque Avellaneda: organizar reunión con Gabriel y las áreas involucradas** - la organizo yo
 
 ## Waiting On
