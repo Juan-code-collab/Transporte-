@@ -10,6 +10,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { CAPAS, COMUNAS, OVERPASS_APIS } from '../src/capas.js';
+import { abrirZip, gtfsAGeojson } from './gtfs.mjs';
 import {
   arreglarPropiedades,
   comunasDe,
@@ -151,6 +152,45 @@ async function sumarExtra(capa, res) {
   console.log(`  · ${extra.length} recorridos de ${nombre} (OpenStreetMap)`);
 }
 
+// GTFS: se busca el .zip vigente en la página del organismo (el más reciente
+// por fecha en el nombre) o, si no, en el catálogo de Transitland. Se descarga
+// una sola vez aunque lo usen varias capas.
+const feedsGtfs = new Map();
+
+async function urlGtfs({ pagina, patron, catalogo }) {
+  try {
+    const r = await fetch(pagina, { headers: { 'User-Agent': AGENTE }, signal: AbortSignal.timeout(60000) });
+    const html = await r.text();
+    const encontrados = [...html.matchAll(patron)].sort((a, b) => b[1].localeCompare(a[1]));
+    if (encontrados.length) return new URL(encontrados[0][0], pagina).href;
+  } catch {
+    // se prueba el catálogo
+  }
+  const dmfr = await pedirJson(catalogo);
+  const url = dmfr.feeds?.find((f) => f.spec === 'gtfs')?.urls?.static_current;
+  if (!url) throw new Error('no se encontró el GTFS vigente');
+  return url;
+}
+
+async function desdeGtfs(cfg) {
+  const clave = cfg.pagina;
+  if (!feedsGtfs.has(clave)) {
+    feedsGtfs.set(
+      clave,
+      (async () => {
+        const url = await urlGtfs(cfg);
+        console.log(`  · GTFS: ${url}`);
+        const r = await fetch(url, { headers: { 'User-Agent': AGENTE }, signal: AbortSignal.timeout(300000) });
+        if (!r.ok) throw new Error(`HTTP ${r.status} en ${url}`);
+        return { url, leer: abrirZip(new Uint8Array(await r.arrayBuffer())) };
+      })(),
+    );
+  }
+  const { url, leer } = await feedsGtfs.get(clave);
+  const nombreZip = url.split('/').pop();
+  return { geojson: gtfsAGeojson(leer, cfg.tipos), fuente: `DTPM — GTFS ${nombreZip}`, url };
+}
+
 // Mapa de Google My Maps (u otro KML público).
 async function desdeKml(url) {
   for (let i = 1; ; i++) {
@@ -208,6 +248,7 @@ async function descargar(capa, fuenteForzada) {
     else for (const f of capa.ckan) intentos.push(['ckan', () => desdeCkan(f)]);
   }
   if (capa.kml) intentos.push(['kml', () => desdeKml(capa.kml)]);
+  if (capa.gtfs) intentos.push(['gtfs', () => desdeGtfs(capa.gtfs)]);
   if (capa.overpass && fuenteForzada !== 'ckan') intentos.push(['overpass', () => desdeOverpass(capa.overpass)]);
 
   for (const [tipo, intento] of intentos) {
@@ -269,7 +310,8 @@ for (const capa of capas) {
     fallidas++;
     continue;
   }
-  if (comunas.length) for (const f of res.geojson.features) f.properties = { ...f.properties, _comunas: comunasDe(f, comunas) };
+  // Las comunas son de CABA: sólo se anotan en las capas de Buenos Aires.
+  if (comunas.length && (capa.ciudad ?? 'ba') === 'ba') for (const f of res.geojson.features) f.properties = { ...f.properties, _comunas: comunasDe(f, comunas) };
   const texto = JSON.stringify(redondear(simplificar(res.geojson)));
   await writeFile(`${DESTINO}${capa.id}.geojson`, texto);
   manifiesto[capa.id] = {

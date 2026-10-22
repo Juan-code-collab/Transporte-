@@ -1,7 +1,7 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
-import { CAPAS, COLORES_SUBTE, COLORES_TREN, OVERPASS_APIS } from './capas.js';
+import { CAPAS, CIUDADES, COLORES_SUBTE, COLORES_TREN, OVERPASS_APIS } from './capas.js';
 import { capasGoogle } from './google.js';
 import {
   autopistaDe,
@@ -59,7 +59,11 @@ const JURISDICCIONES = {
 
 // ---------------------------------------------------------------- mapa base
 
-const mapa = L.map('mapa', { preferCanvas: true }).setView([-34.6118, -58.4173], 12);
+// Ciudad inicial: la del enlace (#santiago) o Buenos Aires.
+const ciudadDe = (capa) => capa.ciudad ?? 'ba';
+let ciudadActual = Object.entries(CIUDADES).find(([, c]) => c.hash && location.hash === `#${c.hash}`)?.[0] ?? 'ba';
+
+const mapa = L.map('mapa', { preferCanvas: true }).setView(CIUDADES[ciudadActual].centro, CIUDADES[ciudadActual].zoom);
 
 const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services';
 const bases = {
@@ -89,7 +93,8 @@ function estiloDe(capa, props) {
   if (capa.id === 'subte') color = colorSubte(props) ?? color;
   if (capa.id === 'trenes') color = COLORES_TREN[lineaTren(props)] ?? color;
   if (capa.id === 'colectivos') color = JURISDICCIONES[jurisdiccionDe(props)]?.color ?? '#7f8c8d';
-  if (/^#[0-9a-f]{6}$/i.test(props.color ?? '') && (capa.archivo || capa.kml)) color = props.color;
+  if (/^#[0-9a-f]{6}$/i.test(props.color ?? '') && (capa.archivo || capa.kml || capa.gtfs)) color = props.color;
+  if (capa.id === 'metro-scl' && /^#[0-9a-f]{6}$/i.test(props.colour ?? '')) color = props.colour;
   return { color, weight: capa.grosor, opacity: 0.85, dashArray: capa.discontinua ? '10 6' : null };
 }
 
@@ -104,6 +109,8 @@ function tituloDe(capa, props) {
   if (capa.id === 'trenes') return `Tren ${lineaTren(props) ?? ''}`.trim();
   if (capa.id === 'ciclovias') return `Ciclovía — ${calleDe(props) ?? 'sin nombre'}`;
   if (capa.id === 'colectivos') return `Colectivo — línea ${lineaDe(props) ?? '?'}`;
+  if (capa.id === 'metro-scl') return `Metro de Santiago — ${lineaMetroScl(props) ?? ''}`;
+  if (capa.id === 'buses-scl') return `Bus ${props.servicio ?? ''}${props.sentido ? ` (${props.sentido})` : ''}`;
   return props.name ?? props.nombre ?? props.NOMBRE ?? capa.nombre;
 }
 
@@ -158,7 +165,28 @@ async function cargar(capa, avisar) {
 //   - 'texto': búsqueda libre, con sugerencias (números de línea, calles).
 // Sin nada elegido, se ve todo.
 
+// Línea del metro de Santiago: "L4A" (GTFS) o ref de OpenStreetMap.
+function lineaMetroScl(p) {
+  const v = String(p.servicio ?? p.ref ?? '').toUpperCase();
+  return v ? (v.startsWith('L') ? v : `L${v}`) : null;
+}
+
 const FILTROS = {
+  'metro-scl': {
+    tipo: 'lista',
+    valor: (p) => lineaMetroScl(p),
+    etiqueta: (v) => `Línea ${v.replace(/^L/, '')}`,
+  },
+  'buses-scl': {
+    tipo: 'texto',
+    titulo: 'Servicios',
+    placeholder: 'Ej.: 210, B12, D09',
+    valor: (p) => String(p.servicio ?? '').toUpperCase(),
+    coincide: (valor, texto) => {
+      const buscados = texto.split(/[\s,;]+/).filter(Boolean).map((t) => t.toUpperCase());
+      return !buscados.length || buscados.includes(valor);
+    },
+  },
   subte: {
     tipo: 'lista',
     valor: (p) => lineaDe(p),
@@ -265,7 +293,7 @@ function elegirComuna(numero) {
     ]).addTo(mapa);
     mapa.fitBounds(L.geoJSON(comunaElegida.feature).getBounds(), { padding: [20, 20] });
   } else {
-    mapa.setView([-34.6118, -58.4173], 12);
+    mapa.setView(CIUDADES[ciudadActual].centro, CIUDADES[ciudadActual].zoom);
   }
   for (const id of estado.keys()) dibujar(id);
 }
@@ -295,7 +323,7 @@ function dibujar(id) {
   const e = estado.get(id);
   if (e.capaLeaflet) mapa.removeLayer(e.capaLeaflet);
   e.capaLeaflet = null;
-  if (!e.activa || !e.datos) return;
+  if (!e.activa || !e.datos || ciudadDe(e.capa) !== ciudadActual) return;
 
   const filtro = filtroDeCapa(e);
   const enComuna = filtroComuna();
@@ -326,6 +354,12 @@ function ordenarCapas() {
   }
 }
 
+// Color con el que se dibuja un valor del filtro (el del primer recorrido que lo tiene).
+function colorEnDatos(e, def, v) {
+  const f = e.datos.features.find((x) => def.valor(x.properties ?? {}) === v);
+  return f ? estiloDe(e.capa, f.properties ?? {}).color : e.capa.color;
+}
+
 // Arma el filtro de la capa con los valores que trae el dato.
 function armarFiltro(e) {
   const def = FILTROS[e.capa.id];
@@ -338,7 +372,7 @@ function armarFiltro(e) {
     caja.innerHTML = `<div class="chips">${valores
       .map(
         (v) => `<label class="chip"><input type="checkbox" value="${escapar(v)}" />
-          <span class="muestra" style="background:${escapar(def.color?.(v) ?? e.capa.color)}"></span>${escapar(def.etiqueta(v))}</label>`,
+          <span class="muestra" style="background:${escapar(def.color?.(v) ?? colorEnDatos(e, def, v))}"></span>${escapar(def.etiqueta(v))}</label>`,
       )
       .join('')}</div>`;
   } else {
@@ -441,7 +475,7 @@ botonPlegar.addEventListener('click', () => {
 // ------------------------------------------------------------------ fuentes
 
 function mostrarFuentes() {
-  const items = Object.entries(fuentes.manifiesto).map(([id, m]) => {
+  const items = Object.entries(fuentes.manifiesto).filter(([id]) => (ciudadDe(CAPAS.find((c) => c.id === id) ?? {}) === ciudadActual)).map(([id, m]) => {
     const nombre = CAPAS.find((c) => c.id === id)?.nombre ?? id;
     const fecha = new Date(m.descargado).toLocaleDateString('es-AR');
     return `<p><strong>${escapar(nombre)}:</strong> ${escapar(m.fuente)} (${fecha})</p>`;
@@ -459,4 +493,31 @@ try {
 mostrarFuentes();
 await cargarComunas();
 
-for (const capa of CAPAS) if (capa.visible) activar(capa.id, true);
+// ------------------------------------------------------------------ ciudades
+//
+// Cada ciudad muestra sólo sus capas. Las capas tildadas de la otra ciudad se
+// cargan recién cuando se elige esa ciudad.
+function cambiarCiudad(id) {
+  ciudadActual = id;
+  const ciudad = CIUDADES[id];
+  history.replaceState(null, '', ciudad.hash ? `#${ciudad.hash}` : location.pathname + location.search);
+  document.querySelector('h1').textContent = document.title = ciudad.titulo;
+  document.getElementById('seccion-comuna').hidden = !ciudad.comunas;
+  if (!ciudad.comunas && comunaElegida) {
+    document.getElementById('filtro-comuna').value = '';
+    elegirComuna('');
+  }
+  mapa.setView(ciudad.centro, ciudad.zoom);
+  for (const e of estado.values()) {
+    const propia = ciudadDe(e.capa) === id;
+    e.li.hidden = !propia;
+    if (propia && e.li.querySelector('input').checked) activar(e.capa.id, true);
+    else dibujar(e.capa.id);
+  }
+}
+
+const selectorCiudad = document.getElementById('ciudad');
+for (const [id, c] of Object.entries(CIUDADES)) selectorCiudad.add(new Option(c.nombre, id));
+selectorCiudad.value = ciudadActual;
+selectorCiudad.addEventListener('change', () => cambiarCiudad(selectorCiudad.value));
+cambiarCiudad(ciudadActual);
